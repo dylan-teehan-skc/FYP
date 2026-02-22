@@ -37,7 +37,7 @@ jobs:
         run: .venv/bin/python -m pytest tests/ -v --cov=. --cov-report=term-missing
       - name: Check coverage
         working-directory: demo/agent-runtime
-        run: .venv/bin/python -m pytest tests/ --cov=. --cov-fail-under=80 -q
+        run: .venv/bin/python -m pytest tests/ --cov=agent --cov=mcp --cov-fail-under=90 -q
 
   test-mcp-server:
     name: Test MCP Tool Server

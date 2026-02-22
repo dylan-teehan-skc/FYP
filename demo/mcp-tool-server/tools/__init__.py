@@ -1,10 +1,10 @@
 """Tool dispatcher for the MCP tool server."""
 
-from tools.schemas import TOOLS
-from tools.ticket import check_ticket_status, close_ticket
-from tools.order import get_order_details, check_refund_eligibility, process_refund
 from tools.customer import get_customer_history, send_customer_message
 from tools.knowledge import search_knowledge_base
+from tools.order import check_refund_eligibility, get_order_details, process_refund
+from tools.schemas import TOOLS
+from tools.ticket import check_ticket_status, close_ticket
 
 _DISPATCH = {
     "check_ticket_status": check_ticket_status,

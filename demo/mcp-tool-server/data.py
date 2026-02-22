@@ -1,9 +1,10 @@
 """Static mock data for the NovaTech Electronics demo scenario."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
 
 def _days_ago(days: int) -> str:
-    dt = datetime.now(timezone.utc) - timedelta(days=days)
+    dt = datetime.now(UTC) - timedelta(days=days)
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
@@ -167,12 +168,16 @@ KNOWLEDGE_BASE = {
         "content": (
             "To pair wireless headphones or earbuds: "
             "1. Turn on Bluetooth on your device. "
-            "2. Press and hold the power button on the headphones for 5 seconds until the LED flashes blue. "
+            "2. Press and hold the power button on the headphones for "
+            "5 seconds until the LED flashes blue. "
             "3. Select the device name from the Bluetooth menu on your phone. "
             "4. If pairing fails, reset by holding power + volume down for 10 seconds. "
             "5. Ensure no other devices are connected to the headphones."
         ),
-        "keywords": ["pair", "pairing", "bluetooth", "connect", "wireless", "headphones", "earbuds"],
+        "keywords": [
+            "pair", "pairing", "bluetooth", "connect",
+            "wireless", "headphones", "earbuds",
+        ],
     },
     "KB-004": {
         "article_id": "KB-004",
@@ -189,9 +194,12 @@ KNOWLEDGE_BASE = {
         "article_id": "KB-005",
         "title": "Shipping and Delivery",
         "content": (
-            "Standard shipping takes 3-5 business days. Express shipping is available for an additional fee. "
-            "All orders include tracking. You will receive a tracking number via email once your order ships. "
-            "If your order has not arrived within the expected window, contact support with your order number."
+            "Standard shipping takes 3-5 business days. "
+            "Express shipping is available for an additional fee. "
+            "All orders include tracking. You will receive a tracking number "
+            "via email once your order ships. "
+            "If your order has not arrived within the expected window, "
+            "contact support with your order number."
         ),
         "keywords": ["shipping", "delivery", "tracking", "express", "arrival", "transit"],
     },

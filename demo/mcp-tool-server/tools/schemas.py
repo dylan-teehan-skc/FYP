@@ -7,7 +7,10 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "ticket_id": {"type": "string", "description": "The support ticket ID (e.g. T-1001)"}
+                "ticket_id": {
+                    "type": "string",
+                    "description": "The support ticket ID (e.g. T-1001)",
+                }
             },
             "required": ["ticket_id"],
         },
@@ -18,7 +21,10 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "order_id": {"type": "string", "description": "The order ID (e.g. ORD-5001)"}
+                "order_id": {
+                    "type": "string",
+                    "description": "The order ID (e.g. ORD-5001)",
+                }
             },
             "required": ["order_id"],
         },
@@ -29,7 +35,10 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "order_id": {"type": "string", "description": "The order ID to check eligibility for"}
+                "order_id": {
+                    "type": "string",
+                    "description": "The order ID to check eligibility for",
+                }
             },
             "required": ["order_id"],
         },
@@ -67,7 +76,10 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "ticket_id": {"type": "string", "description": "The ticket ID to close"},
-                "resolution_summary": {"type": "string", "description": "Summary of how the issue was resolved"},
+                "resolution_summary": {
+                    "type": "string",
+                    "description": "Summary of how the issue was resolved",
+                },
             },
             "required": ["ticket_id", "resolution_summary"],
         },
@@ -78,7 +90,10 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "customer_id": {"type": "string", "description": "The customer ID (e.g. C-101)"}
+                "customer_id": {
+                    "type": "string",
+                    "description": "The customer ID (e.g. C-101)",
+                }
             },
             "required": ["customer_id"],
         },

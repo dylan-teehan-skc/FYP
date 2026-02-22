@@ -46,7 +46,10 @@ def check_refund_eligibility(arguments: dict, state) -> dict:
         return {
             "order_id": order_id,
             "eligible": False,
-            "reason": f"Order status is '{order['status']}', refunds only available for delivered orders",
+            "reason": (
+                f"Order status is '{order['status']}', "
+                "refunds only available for delivered orders"
+            ),
         }
 
     days = order["days_since_delivery"]
@@ -54,7 +57,10 @@ def check_refund_eligibility(arguments: dict, state) -> dict:
         return {
             "order_id": order_id,
             "eligible": False,
-            "reason": f"Order was delivered {days} days ago, outside the {REFUND_WINDOW_DAYS}-day return window",
+            "reason": (
+                f"Order was delivered {days} days ago, "
+                f"outside the {REFUND_WINDOW_DAYS}-day return window"
+            ),
         }
 
     return {

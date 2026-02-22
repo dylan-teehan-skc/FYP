@@ -1,7 +1,7 @@
 """Mutable demo state manager with reset support."""
 
 import copy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from data import INITIAL_ORDERS, INITIAL_TICKETS
 
@@ -28,7 +28,7 @@ class StateManager:
             return None
         ticket["status"] = "closed"
         ticket["resolution_summary"] = resolution_summary
-        ticket["closed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        ticket["closed_at"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         return ticket
 
     def process_refund(self, order_id: str, amount: float, reason: str) -> dict | None:
@@ -42,7 +42,7 @@ class StateManager:
             "amount": amount,
             "reason": reason,
             "status": "processed",
-            "processed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "processed_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
         self.processed_refunds[order_id] = refund
         order["refund_status"] = "refunded"
@@ -58,7 +58,7 @@ class StateManager:
             "customer_id": customer_id,
             "subject": subject,
             "message": message,
-            "sent_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "sent_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
         self.sent_messages.append(record)
         return record
