@@ -20,6 +20,7 @@ jobs:
       - run: ruff check demo/mcp-tool-server/
       - run: ruff check sdk/src/ sdk/tests/
       - run: ruff check platform/collector/src/ platform/collector/tests/
+      - run: ruff check platform/analysis/src/ platform/analysis/tests/
 
   test-agent-runtime:
     name: Test Agent Runtime
@@ -97,3 +98,23 @@ jobs:
       - name: Check coverage
         working-directory: platform/collector
         run: .venv/bin/python -m pytest tests/ --cov=collector --cov-fail-under=90 -q
+
+  test-analysis:
+    name: Test Analysis Engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        working-directory: platform/analysis
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -e ".[dev]"
+      - name: Run tests
+        working-directory: platform/analysis
+        run: .venv/bin/python -m pytest tests/ -v --cov=analysis --cov-report=term-missing
+      - name: Check coverage
+        working-directory: platform/analysis
+        run: .venv/bin/python -m pytest tests/ --cov=analysis --cov-fail-under=90 -q
