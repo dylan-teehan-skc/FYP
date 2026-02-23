@@ -75,6 +75,20 @@ class Database:
             "SELECT workflow_id, task_description, embedding FROM workflow_embeddings"
         )
 
+    async def fetch_embedding_for_workflow(self, workflow_id: str) -> list[float] | None:
+        """Fetch the embedding vector for a single workflow (for attaching to optimal paths)."""
+        assert self._pool is not None
+        row = await self._pool.fetchrow(
+            "SELECT embedding FROM workflow_embeddings WHERE workflow_id = $1",
+            UUID(workflow_id),
+        )
+        if not row or row["embedding"] is None:
+            return None
+        embedding = row["embedding"]
+        if isinstance(embedding, str):
+            return [float(x) for x in embedding.strip("[]").split(",")]
+        return list(embedding)
+
     # --- Write methods ---
 
     async def upsert_optimal_path(self, path: dict[str, Any]) -> None:

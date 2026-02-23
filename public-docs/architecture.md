@@ -199,8 +199,8 @@ async with optimizer.trace("Handle refund") as trace:
 │                                                  │
 │  Validates events (Pydantic)                     │
 │  Stores in PostgreSQL                            │
-│  Generates 1536-dim embeddings on workflow       │
-│    complete (text-embedding-3-small via LiteLLM) │
+│  Generates 768-dim embeddings on workflow         │
+│    complete (gemini/gemini-embedding-001 via LiteLLM)│
 │  Serves optimal path queries via semantic search │
 │  Configurable threshold (default 0.60)           │
 └──────────────────┬───────────────────────────────┘
@@ -210,8 +210,8 @@ async with optimizer.trace("Handle refund") as trace:
 │  POSTGRESQL + PGVECTOR (port 5432)               │
 │                                                  │
 │  event_logs           Raw structured events      │
-│  workflow_embeddings  VECTOR(1536) embeddings     │
-│  optimal_paths        VECTOR(1536) + JSONB paths  │
+│  workflow_embeddings  VECTOR(768) embeddings      │
+│  optimal_paths        VECTOR(768) + JSONB paths   │
 │                       HNSW indexes (cosine ops)  │
 └──────────────────┬───────────────────────────────┘
                    │
@@ -299,7 +299,7 @@ The transition is automatic. As data accumulates, the system shifts from explora
 |--------|------|-------|
 | `workflow_id` | UUID | Foreign key to `event_logs` |
 | `task_description` | TEXT | |
-| `embedding` | VECTOR(1536) | pgvector, text-embedding-3-small native dims |
+| `embedding` | VECTOR(768) | pgvector, gemini/gemini-embedding-001 |
 | `model_version` | VARCHAR | |
 | `created_at` | TIMESTAMPTZ | |
 
@@ -314,7 +314,7 @@ The transition is automatic. As data accumulates, the system shifts from explora
 | `avg_steps` | FLOAT | |
 | `success_rate` | FLOAT | |
 | `execution_count` | INTEGER | |
-| `embedding` | VECTOR(1536) | pgvector |
+| `embedding` | VECTOR(768) | pgvector |
 | `updated_at` | TIMESTAMPTZ | |
 
 ### Indexes
@@ -340,7 +340,7 @@ All services orchestrated via Docker Compose:
 | Layer | Technology |
 |-------|------------|
 | Backend | Python 3.11+, FastAPI, asyncio, asyncpg, Pydantic v2, LiteLLM |
-| Database | PostgreSQL 16 + pgvector (VECTOR(1536), HNSW indexes) |
+| Database | PostgreSQL 16 + pgvector (VECTOR(768), HNSW indexes) |
 | Frontend | Next.js, React, react-flow (graphs), recharts (charts), Tailwind CSS |
 | Analysis | PM4Py (process mining), networkx (DAGs), pgvector (semantic search), pandas (DataFrames), LiteLLM (embeddings) |
 | Agent | LiteLLM (multi-provider LLM), MCP (tool communication), structlog |
