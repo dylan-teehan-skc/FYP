@@ -44,7 +44,7 @@ public-docs/             Architecture and design documentation.
 docker-compose up -d
 
 # 2. Start the collector service
-cd platform/collector && .venv/bin/python -m collector
+cd platform/collector && .venv/bin/collector
 
 # 3. Start the MCP tool server
 cd demo/mcp-tool-server && .venv/bin/python3 main.py
