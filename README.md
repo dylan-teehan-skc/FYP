@@ -35,21 +35,48 @@ public-docs/             Architecture and design documentation.
 ### Prerequisites
 
 - Python 3.11+
-- PostgreSQL 16 with pgvector extension (`docker-compose up -d`)
+- Docker (for PostgreSQL 16 + pgvector)
+- If you have a local PostgreSQL running on port 5432, stop it first — Docker needs that port:
+  ```bash
+  brew services stop postgresql@17   # or whichever version
+  ```
+
+### Install dependencies
+
+Each component has its own virtual environment. Install once before running:
+
+```bash
+# SDK
+cd sdk && pip install -e ".[dev]"
+
+# Collector
+cd platform/collector && pip install -e ".[dev]"
+
+# MCP Tool Server (uses uv)
+cd demo/mcp-tool-server && uv sync
+
+# Agent Runtime (needs SDK installed first)
+cd demo/agent-runtime && pip install -e ../../sdk && pip install -e ".[dev]"
+
+# Analysis Engine
+cd platform/analysis && pip install -e ".[dev]"
+```
 
 ### Run the platform
 
+Run each service in a separate terminal tab:
+
 ```bash
-# 1. Start Postgres + pgvector
+# Tab 1: Start Postgres + pgvector
 docker-compose up -d
 
-# 2. Start the collector service
+# Tab 2: Start the collector service (wait for Postgres to be ready)
 cd platform/collector && .venv/bin/collector
 
-# 3. Start the MCP tool server
+# Tab 3: Start the MCP tool server
 cd demo/mcp-tool-server && .venv/bin/python3 main.py
 
-# 4. Run the demo (5 scenarios x 3 rounds = 15 workflows)
+# Tab 4: Run the demo (5 scenarios x 3 rounds = 15 workflows)
 cd demo/agent-runtime && PYTHONPATH=. .venv/bin/python3 demo_runner.py --rounds 3
 
 # 5. Run analysis to discover optimal paths
