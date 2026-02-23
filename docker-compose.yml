@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: workflow-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: workflow_optimizer
+      POSTGRES_USER: collector
+      POSTGRES_PASSWORD: collector_dev
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./platform/collector/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U collector -d workflow_optimizer"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:
