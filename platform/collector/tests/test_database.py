@@ -199,7 +199,7 @@ class TestDatabaseQueries:
         await db.upsert_embedding(
             "660e8400-e29b-41d4-a716-446655440000",
             "Handle refund",
-            [0.1] * 768,
+            [0.1] * 1536,
             "test-model",
         )
         db._pool.execute.assert_called_once()
@@ -207,7 +207,7 @@ class TestDatabaseQueries:
     async def test_find_similar_paths(self) -> None:
         db = self._make_db()
         db._pool.fetchrow = AsyncMock(return_value=None)
-        result = await db.find_similar_paths([0.1] * 768)
+        result = await db.find_similar_paths([0.1] * 1536)
         assert result is None
         db._pool.fetchrow.assert_called_once()
 

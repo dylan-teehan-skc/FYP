@@ -11,7 +11,7 @@ class TestEmbeddingService:
     async def test_successful_generation(self) -> None:
         service = EmbeddingService(model="test-model")
         mock_response = MagicMock()
-        mock_response.data = [{"embedding": [0.5] * 768}]
+        mock_response.data = [{"embedding": [0.5] * 1536}]
 
         with patch.dict("sys.modules", {"litellm": MagicMock()}) as _:
             import litellm
@@ -20,7 +20,7 @@ class TestEmbeddingService:
             result = await service.generate("Handle refund")
 
         assert result is not None
-        assert len(result) == 768
+        assert len(result) == 1536
         assert result[0] == 0.5
 
     async def test_returns_none_on_error(self) -> None:

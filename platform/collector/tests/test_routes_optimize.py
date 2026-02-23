@@ -63,7 +63,7 @@ class TestOptimizePath:
             "avg_steps": 3.0,
             "success_rate": 0.80,
             "execution_count": 5,
-            "similarity": 0.75,
+            "similarity": 0.45,
         })
         response = await client.post(
             "/optimize/path", json={"task_description": "Unknown task"}

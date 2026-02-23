@@ -21,7 +21,7 @@ class ModeSelector:
 
     def __init__(
         self,
-        similarity_threshold: float = 0.90,
+        similarity_threshold: float = 0.60,
         min_executions: int = 10,
         min_success_rate: float = 0.85,
     ) -> None:

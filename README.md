@@ -1,6 +1,6 @@
 # Self-Optimising Workflow Intelligence Platform
 
-A decoupled observability and optimisation platform for AI agent workflows. Captures execution traces, discovers optimal tool-call sequences, and feeds that knowledge back to agents at runtime so they improve over time.
+A decoupled observability and optimisation platform for AI agent workflows. Captures execution traces, discovers optimal tool-call sequences via process mining and Pareto-optimal path selection, and feeds that knowledge back to agents at runtime so they improve over time.
 
 **Add 2 lines of code. Every workflow is captured, analysed, and optimised automatically.**
 
@@ -11,7 +11,7 @@ A decoupled observability and optimisation platform for AI agent workflows. Capt
 3. If yes, agent gets guidance (guided mode). If no, agent runs freely (exploration mode)
 4. SDK auto-captures every tool call, latency, cost, success/failure
 5. Events stream to the collector and are stored in PostgreSQL + pgvector
-6. Analysis engine builds execution graphs and finds optimal paths
+6. Analysis engine clusters workflows, builds execution graphs, and discovers Pareto-optimal paths
 7. Next time a similar task comes in, guided mode kicks in
 8. System improves with every run, no manual tuning needed
 
@@ -21,31 +21,47 @@ A decoupled observability and optimisation platform for AI agent workflows. Capt
 sdk/                     The product. Self-contained Python SDK (pip installable).
 platform/                Backend services (deployed together).
   collector/             FastAPI event receiver + pgvector queries.
-  analysis/              Trace reconstruction, pattern detection, path optimisation.
+  analysis/              Process mining, pattern detection, Pareto-optimal path discovery.
 dashboard/               React/Next.js frontend for visualisation and metrics.
 demo/                    Example consumer (proves the platform works).
   agent-runtime/         Async Python agent system with LLM reasoning.
   mcp-tool-server/       FastAPI mock tools (8 customer support tools).
   demo_runner.py         Runs the 5 NovaTech demo scenarios.
-docs/                    Spec, architecture, diary, demo scenario, useful links.
+public-docs/             Architecture and design documentation.
 ```
 
 ## Quick Start
 
-### Run the demo
+### Prerequisites
+
+- Python 3.11+
+- PostgreSQL 16 with pgvector extension (`docker-compose up -d`)
+
+### Run the platform
 
 ```bash
-# 1. Start the MCP tool server
+# 1. Start Postgres + pgvector
+docker-compose up -d
+
+# 2. Start the collector service
+cd platform/collector && .venv/bin/python -m collector
+
+# 3. Start the MCP tool server
 cd demo/mcp-tool-server && .venv/bin/python3 main.py
 
-# 2. In another terminal, run the agent
+# 4. Run the agent
 cd demo/agent-runtime && .venv/bin/python3 main.py
 ```
 
 ### Run tests
 
 ```bash
-cd demo/agent-runtime && .venv/bin/python3 -m pytest tests/ -v
+# All projects
+cd demo/agent-runtime   && .venv/bin/python -m pytest tests/ -v   # 39 tests
+cd demo/mcp-tool-server && .venv/bin/python -m pytest tests/ -v   # 54 tests
+cd sdk                  && .venv/bin/python -m pytest tests/ -v   # 57 tests
+cd platform/collector   && .venv/bin/python -m pytest tests/ -v   # 49 tests, 97% coverage
+cd platform/analysis    && .venv/bin/python -m pytest tests/ -v   # 131 tests, 92% coverage
 ```
 
 ## Integration
@@ -53,31 +69,40 @@ cd demo/agent-runtime && .venv/bin/python3 -m pytest tests/ -v
 Companies integrate via the Python SDK:
 
 ```python
-from workflow_sdk import WorkflowOptimizer
+from workflow_optimizer import WorkflowOptimizer
 
 optimizer = WorkflowOptimizer(endpoint="http://localhost:9000")
 
+# Get optimal path guidance at workflow start
+guidance = await optimizer.get_optimal_path("Handle refund for order ORD-789")
+# Returns: {"mode": "guided", "path": ["check_ticket", ...], "confidence": 0.87}
+# Or:      {"mode": "exploration"}  (not enough data yet)
+
+# Auto-capture every step
 async with optimizer.trace("Handle refund for order ORD-789") as trace:
-    with trace.step("check_ticket"):
+    with trace.step("check_ticket", params={"id": "T-123"}):
         result = await check_ticket("T-123")
-```
-
-Or via the REST API:
-
-```
-POST http://localhost:9000/events
-{"workflow_id": "run-456", "tool": "check_ticket", "latency_ms": 230}
+    with trace.step("process_refund", params={"order": "ORD-789"}):
+        result = await process_refund("ORD-789", 99.99)
 ```
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Python 3.11+, FastAPI, asyncio, aiohttp, Pydantic v2, LiteLLM |
-| Database | PostgreSQL 16 + pgvector |
+| Backend | Python 3.11+, FastAPI, asyncio, asyncpg, Pydantic v2, LiteLLM |
+| Database | PostgreSQL 16 + pgvector (VECTOR(1536), HNSW indexes) |
 | Frontend | Next.js, React, react-flow, recharts, Tailwind CSS |
-| Analysis | networkx, pgvector, LiteLLM |
-| Testing | pytest, pytest-asyncio, aioresponses, ruff |
+| Analysis | PM4Py (process mining), networkx (DAGs), pgvector (semantic search), pandas |
+| Testing | pytest, pytest-asyncio, pytest-cov, ruff |
+
+## Research-Informed Design
+
+The analysis engine uses three techniques grounded in academic literature:
+
+1. **PM4Py Inductive Miner** for process discovery + conformance checking — replaces raw Directly-Follows Graphs which allow spurious paths (van der Aalst 2019)
+2. **Two-level clustering** — cosine similarity on task embeddings + Levenshtein edit distance on tool sequences (Song et al. 2009)
+3. **Pareto front enumeration** for multi-objective path optimisation on duration, cost, and success rate — weighted Dijkstra can't find non-convex Pareto solutions (Yassa et al. 2023)
 
 ## Demo Scenario
 
@@ -93,7 +118,4 @@ The demo simulates NovaTech Electronics, a company handling customer support tic
 
 ## Documentation
 
-- [Architecture](docs/architecture.txt) - Component descriptions, data flow, database schema
-- [Specification](docs/spec.md) - Full technical spec
-- [Demo Scenario](docs/demo.txt) - NovaTech demo details
-- [Design Diary](docs/diary-and-desing-choices.txt) - Decisions and rationale
+- [Architecture](public-docs/architecture.md) - Component descriptions, data flow, database schema

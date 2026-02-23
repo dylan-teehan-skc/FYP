@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     database_pool_max: int = 10
     embedding_model: str = "text-embedding-3-small"
     log_level: str = "INFO"
+    similarity_threshold: float = 0.60
     host: str = "0.0.0.0"
     port: int = 9000
 
