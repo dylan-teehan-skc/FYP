@@ -83,7 +83,10 @@ class MCPClient:
                 if attempt < self.max_retries - 1:
                     await asyncio.sleep(self.retry_delay * (attempt + 1))
 
-        return {"success": False, "error": f"Failed after {self.max_retries} attempts: {last_error}"}
+        return {
+            "success": False,
+            "error": f"Failed after {self.max_retries} attempts: {last_error}",
+        }
 
     def get_tools_documentation(self) -> str:
         """Format tools for inclusion in agent prompts."""

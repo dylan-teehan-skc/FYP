@@ -14,15 +14,15 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("asyncio").setLevel(logging.WARNING)
 logging.getLogger("aiohttp").setLevel(logging.WARNING)
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # noqa: E402
 
-from agent.agent import Agent
-from mcp.client import MCPClient
-from orchestrator.orchestrator import Orchestrator
-from reasoning.engine import ReasoningEngine
-from utils.config import AppConfig
-from utils.exceptions import ConfigurationError
-from utils.logger import get_logger, init_logging
+from agent.agent import Agent  # noqa: E402
+from mcp.client import MCPClient  # noqa: E402
+from orchestrator.orchestrator import Orchestrator  # noqa: E402
+from reasoning.engine import ReasoningEngine  # noqa: E402
+from utils.config import AppConfig  # noqa: E402
+from utils.exceptions import ConfigurationError  # noqa: E402
+from utils.logger import get_logger, init_logging  # noqa: E402
 
 
 def load_config() -> AppConfig:
@@ -70,7 +70,10 @@ async def main() -> None:
         orchestrator = Orchestrator()
         orchestrator.register_agent(agent)
 
-        task = "Handle support ticket T-12345: process the refund if eligible, notify the customer, and close the ticket"
+        task = (
+            "Handle support ticket T-12345: process the refund "
+            "if eligible, notify the customer, and close the ticket"
+        )
         result = await orchestrator.execute(task)
 
         log.info(

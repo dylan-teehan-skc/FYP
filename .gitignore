@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.egg-info/
 
 # Virtual environments
 .venv/
@@ -38,3 +39,4 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+docs/
