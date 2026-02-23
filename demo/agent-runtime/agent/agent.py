@@ -28,6 +28,8 @@ class Agent:
         self.action_history: list[dict[str, Any]] = []
         self.log = get_logger(f"Agent:{name}")
 
+    _MAX_CONSECUTIVE_NONE: int = 3
+
     async def execute(self, task: str, context: str = "") -> dict[str, Any]:
         """Execute a task and return the result."""
         self.action_history = []
@@ -36,6 +38,7 @@ class Agent:
         self.log.info("task_started", task=task[:100])
 
         step = 0
+        consecutive_none = 0
         while True:
             if self._is_looping():
                 self.log.warning("loop_detected", step=step)
@@ -50,7 +53,7 @@ class Agent:
                 history=self.action_history,
             )
 
-            action = decision.get("action")
+            action: str | None = decision.get("action")
             reasoning = decision.get("reasoning", "")
 
             self.log.info("step", step=step, reasoning=reasoning[:200])
@@ -60,8 +63,14 @@ class Agent:
                 return {"success": True, "steps": step, "history": self.action_history}
 
             if action is None:
-                self.log.debug("no_action", step=step)
+                consecutive_none += 1
+                if consecutive_none >= self._MAX_CONSECUTIVE_NONE:
+                    self.log.warning("max_none_actions_reached", step=step)
+                    return {"success": False, "steps": step, "history": self.action_history}
+                self.log.debug("no_action", step=step, consecutive=consecutive_none)
                 continue
+
+            consecutive_none = 0
 
             params = decision.get("parameters", {})
             self.log.info("tool_call", action=action, params=params)

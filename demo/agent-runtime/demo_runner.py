@@ -265,6 +265,12 @@ def parse_args() -> argparse.Namespace:
         default="http://localhost:9000",
         help="Collector service URL (default: http://localhost:9000)",
     )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=5,
+        help="Max concurrent scenarios per round (default: 5)",
+    )
     return parser.parse_args()
 
 
@@ -303,85 +309,116 @@ def build_guided_context(response: OptimalPathResponse) -> str:
 async def run_scenario(
     scenario: Scenario,
     round_number: int,
-    tracing_mcp: TracingMCPClient,
-    tracing_reasoning: TracingReasoningEngine,
+    mcp_client: MCPClient,
+    reasoning_engine: ReasoningEngine,
     optimizer: WorkflowOptimizer,
     config: AppConfig,
+    semaphore: asyncio.Semaphore,
 ) -> ScenarioResult:
-    """Run a single scenario with SDK tracing and return metrics."""
-    log = get_logger("demo_runner")
+    """Run a single scenario with SDK tracing and return metrics.
 
-    guidance = await optimizer.get_optimal_path(scenario.task_description)
-    mode = guidance.mode
-    context = build_guided_context(guidance)
-
-    if mode == "guided":
+    Creates per-scenario isolation (LastDecision, TracingReasoningEngine,
+    TracingMCPClient, Agent) so multiple scenarios can run concurrently
+    without shared mutable state.
+    """
+    async with semaphore:
+        log = get_logger("demo_runner")
         log.info(
-            "guided_mode",
+            "scenario_start",
+            round=round_number,
             ticket=scenario.ticket_id,
-            path=guidance.path,
-            confidence=guidance.confidence,
+            type=scenario.workflow_type,
         )
 
-    agent = Agent(
-        name="SupportAgent",
-        role="customer_support",
-        reasoning_engine=tracing_reasoning,
-        mcp_client=tracing_mcp,
-        loop_threshold=config.agent.loop_detection_threshold,
-        loop_window=config.agent.loop_detection_window,
-    )
+        # Per-scenario isolation — no shared mutable state
+        last_decision = LastDecision()
+        tracing_reasoning = TracingReasoningEngine(reasoning_engine, last_decision)
+        tracing_mcp = TracingMCPClient(mcp_client, last_decision, config.llm.model)
 
-    tracing_reasoning.reset_totals()
-    start = time.perf_counter()
+        guidance = await optimizer.get_optimal_path(scenario.task_description)
+        mode = guidance.mode
+        context = build_guided_context(guidance)
 
-    async with optimizer.trace(
-        scenario.task_description,
-        agent_name="SupportAgent",
-        agent_role="customer_support",
-    ) as trace:
-        tracing_mcp.set_trace(trace)
-        try:
-            result = await agent.execute(scenario.task_description, context=context)
-            success = result["success"]
-            steps = result.get("steps", 0)
-            history = result.get("history", [])
-        except LoopDetectedError as e:
-            log.warning("loop_detected", ticket=scenario.ticket_id, error=str(e))
-            success = False
-            steps = len(agent.action_history)
-            history = agent.action_history
-        finally:
-            tracing_mcp.set_trace(None)
+        if mode == "guided":
+            log.info(
+                "guided_mode",
+                ticket=scenario.ticket_id,
+                path=guidance.path,
+                confidence=guidance.confidence,
+            )
 
-    duration_ms = (time.perf_counter() - start) * 1000
-    tool_sequence = [h["action"] for h in history if h.get("action")]
+        agent = Agent(
+            name="SupportAgent",
+            role="customer_support",
+            reasoning_engine=tracing_reasoning,
+            mcp_client=tracing_mcp,
+            loop_threshold=config.agent.loop_detection_threshold,
+            loop_window=config.agent.loop_detection_window,
+        )
 
-    return ScenarioResult(
-        scenario=scenario,
-        round_number=round_number,
-        mode=mode,
-        success=success,
-        steps=steps,
-        duration_ms=duration_ms,
-        tool_sequence=tool_sequence,
-        workflow_id=trace.workflow_id,
-        confidence=guidance.confidence,
-        total_prompt_tokens=tracing_reasoning.total_prompt_tokens,
-        total_completion_tokens=tracing_reasoning.total_completion_tokens,
-    )
+        start = time.perf_counter()
+
+        async with optimizer.trace(
+            scenario.task_description,
+            agent_name="SupportAgent",
+            agent_role="customer_support",
+        ) as trace:
+            tracing_mcp.set_trace(trace)
+            try:
+                result = await agent.execute(scenario.task_description, context=context)
+                success = result["success"]
+                steps = result.get("steps", 0)
+                history = result.get("history", [])
+            except LoopDetectedError as e:
+                log.warning("loop_detected", ticket=scenario.ticket_id, error=str(e))
+                success = False
+                steps = len(agent.action_history)
+                history = agent.action_history
+            finally:
+                tracing_mcp.set_trace(None)
+
+        duration_ms = (time.perf_counter() - start) * 1000
+        tool_sequence = [h["action"] for h in history if h.get("action")]
+
+        status = "SUCCESS" if success else "FAILED"
+        log.info(
+            "scenario_complete",
+            ticket=scenario.ticket_id,
+            type=scenario.workflow_type,
+            mode=mode,
+            status=status,
+            steps=steps,
+            expected=scenario.expected_steps,
+            duration_ms=round(duration_ms),
+            tools=" -> ".join(tool_sequence),
+        )
+
+        return ScenarioResult(
+            scenario=scenario,
+            round_number=round_number,
+            mode=mode,
+            success=success,
+            steps=steps,
+            duration_ms=duration_ms,
+            tool_sequence=tool_sequence,
+            workflow_id=trace.workflow_id,
+            confidence=guidance.confidence,
+            total_prompt_tokens=tracing_reasoning.total_prompt_tokens,
+            total_completion_tokens=tracing_reasoning.total_completion_tokens,
+        )
 
 
 async def run_round(
     round_number: int,
     total_rounds: int,
     scenarios: list[Scenario],
-    tracing_mcp: TracingMCPClient,
-    tracing_reasoning: TracingReasoningEngine,
+    mcp_client: MCPClient,
+    reasoning_engine: ReasoningEngine,
     optimizer: WorkflowOptimizer,
     config: AppConfig,
+    semaphore: asyncio.Semaphore,
 ) -> list[ScenarioResult]:
-    """Run all scenarios for one round, shuffled."""
+    """Run all scenarios for one round concurrently (structured concurrency)."""
     log = get_logger("demo_runner")
     log.info("round_start", round=round_number, total_rounds=total_rounds)
 
@@ -389,33 +426,20 @@ async def run_round(
     random.shuffle(shuffled)
 
     results: list[ScenarioResult] = []
-    for i, scenario in enumerate(shuffled, 1):
-        log.info(
-            "scenario_start",
-            round=round_number,
-            index=f"{i}/{len(shuffled)}",
-            ticket=scenario.ticket_id,
-            type=scenario.workflow_type,
-        )
+    tasks: list[asyncio.Task[ScenarioResult]] = []
 
-        result = await run_scenario(
-            scenario, round_number, tracing_mcp, tracing_reasoning,
-            optimizer, config,
-        )
-        results.append(result)
+    async with asyncio.TaskGroup() as tg:
+        for scenario in shuffled:
+            task = tg.create_task(
+                run_scenario(
+                    scenario, round_number, mcp_client, reasoning_engine,
+                    optimizer, config, semaphore,
+                )
+            )
+            tasks.append(task)
 
-        status = "SUCCESS" if result.success else "FAILED"
-        log.info(
-            "scenario_complete",
-            ticket=scenario.ticket_id,
-            type=scenario.workflow_type,
-            mode=result.mode,
-            status=status,
-            steps=result.steps,
-            expected=scenario.expected_steps,
-            duration_ms=round(result.duration_ms),
-            tools=" -> ".join(result.tool_sequence),
-        )
+    for task in tasks:
+        results.append(task.result())
 
     return results
 
@@ -531,9 +555,7 @@ async def main() -> None:
         agent_role="customer_support",
     )
 
-    last_decision = LastDecision()
-    tracing_reasoning = TracingReasoningEngine(reasoning_engine, last_decision)
-    tracing_mcp = TracingMCPClient(mcp_client, last_decision, config.llm.model)
+    semaphore = asyncio.Semaphore(args.concurrency)
 
     try:
         async with optimizer:
@@ -542,7 +564,8 @@ async def main() -> None:
             for round_num in range(1, args.rounds + 1):
                 results = await run_round(
                     round_num, args.rounds, SCENARIOS,
-                    tracing_mcp, tracing_reasoning, optimizer, config,
+                    mcp_client, reasoning_engine, optimizer, config,
+                    semaphore,
                 )
                 all_results.extend(results)
                 log_round_summary(round_num, results)
