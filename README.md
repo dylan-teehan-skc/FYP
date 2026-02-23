@@ -35,29 +35,62 @@ public-docs/             Architecture and design documentation.
 ### Prerequisites
 
 - Python 3.11+
-- PostgreSQL 16 with pgvector extension (`docker-compose up -d`)
+- Docker (for PostgreSQL 16 + pgvector)
+- If you have a local PostgreSQL running on port 5432, stop it first — Docker needs that port:
+  ```bash
+  brew services stop postgresql@17   # or whichever version
+  ```
+
+### Install dependencies
+
+Each component has its own virtual environment. Install once before running:
+
+```bash
+# SDK
+cd sdk && pip install -e ".[dev]"
+
+# Collector
+cd platform/collector && pip install -e ".[dev]"
+
+# MCP Tool Server (uses uv)
+cd demo/mcp-tool-server && uv sync
+
+# Agent Runtime (needs SDK installed first)
+cd demo/agent-runtime && pip install -e ../../sdk && pip install -e ".[dev]"
+
+# Analysis Engine
+cd platform/analysis && pip install -e ".[dev]"
+```
 
 ### Run the platform
 
+Run each service in a separate terminal tab:
+
 ```bash
-# 1. Start Postgres + pgvector
+# Tab 1: Start Postgres + pgvector
 docker-compose up -d
 
-# 2. Start the collector service
-cd platform/collector && .venv/bin/python -m collector
+# Tab 2: Start the collector service (wait for Postgres to be ready)
+cd platform/collector && .venv/bin/collector
 
-# 3. Start the MCP tool server
+# Tab 3: Start the MCP tool server
 cd demo/mcp-tool-server && .venv/bin/python3 main.py
 
-# 4. Run the agent
-cd demo/agent-runtime && .venv/bin/python3 main.py
+# Tab 4: Run the demo (5 scenarios x 3 rounds = 15 workflows)
+cd demo/agent-runtime && PYTHONPATH=. .venv/bin/python3 demo_runner.py --rounds 3
+
+# 5. Run analysis to discover optimal paths
+cd platform/analysis && .venv/bin/python -m analysis.pipeline
+
+# 6. Run the demo again — some scenarios now get guided mode
+cd demo/agent-runtime && PYTHONPATH=. .venv/bin/python3 demo_runner.py --rounds 3
 ```
 
 ### Run tests
 
 ```bash
 # All projects
-cd demo/agent-runtime   && .venv/bin/python -m pytest tests/ -v   # 39 tests
+cd demo/agent-runtime   && .venv/bin/python -m pytest tests/ -v   # 59 tests
 cd demo/mcp-tool-server && .venv/bin/python -m pytest tests/ -v   # 54 tests
 cd sdk                  && .venv/bin/python -m pytest tests/ -v   # 57 tests
 cd platform/collector   && .venv/bin/python -m pytest tests/ -v   # 49 tests, 97% coverage
@@ -98,11 +131,17 @@ async with optimizer.trace("Handle refund for order ORD-789") as trace:
 
 ## Research-Informed Design
 
-The analysis engine uses three techniques grounded in academic literature:
+The platform design is grounded in academic literature:
 
+**Analysis engine:**
 1. **PM4Py Inductive Miner** for process discovery + conformance checking — replaces raw Directly-Follows Graphs which allow spurious paths (van der Aalst 2019)
 2. **Two-level clustering** — cosine similarity on task embeddings + Levenshtein edit distance on tool sequences (Song et al. 2009)
 3. **Pareto front enumeration** for multi-objective path optimisation on duration, cost, and success rate — weighted Dijkstra can't find non-convex Pareto solutions (Yassa et al. 2023)
+
+**SDK integration:**
+4. **Transparent proxy pattern** for zero-refactoring instrumentation — TracingMCPClient wraps the real MCP client without the agent knowing (MCP Proxy Wrapper 2025; Sypherd et al. 2024)
+5. **Soft constraint guidance** — optimal paths injected as context hints, not hard constraints, preserving agent autonomy (KnowAgent, Zhu et al. NAACL 2025)
+6. **AgentBoard progress metrics** — incremental advancement tracking beyond binary success/failure (Ma et al. NeurIPS 2024)
 
 ## Demo Scenario
 
