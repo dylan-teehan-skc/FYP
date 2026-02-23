@@ -52,7 +52,7 @@ def assign_cluster_label(descriptions: list[str]) -> str:
 
 async def cluster_by_embedding(
     db: Database,
-    similarity_threshold: float = 0.90,
+    similarity_threshold: float = 0.60,
     min_executions: int = 3,
 ) -> dict[str, list[str]]:
     """Group workflow_ids by task description embedding similarity.

@@ -68,7 +68,7 @@ class MCPConfig(BaseModel):
 class ModeSelectorConfig(BaseModel):
     """Mode selector configuration for guided vs exploration mode."""
 
-    similarity_threshold: float = Field(default=0.90, ge=0.0, le=1.0)
+    similarity_threshold: float = Field(default=0.60, ge=0.0, le=1.0)
     min_executions: int = Field(default=10, ge=1)
     min_success_rate: float = Field(default=0.85, ge=0.0, le=1.0)
 

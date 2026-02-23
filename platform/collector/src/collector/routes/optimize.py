@@ -10,8 +10,6 @@ from collector.models import OptimalPathOut, OptimizePathIn
 log = get_logger("collector.routes.optimize")
 router = APIRouter()
 
-SIMILARITY_THRESHOLD = 0.90
-
 
 @router.post("/optimize/path")
 async def optimize_path(body: OptimizePathIn, request: Request) -> OptimalPathOut:
@@ -23,6 +21,7 @@ async def optimize_path(body: OptimizePathIn, request: Request) -> OptimalPathOu
     """
     db = request.app.state.db
     embedding_service = request.app.state.embedding_service
+    threshold = request.app.state.settings.similarity_threshold
 
     embedding = await embedding_service.generate(body.task_description)
     if not embedding:
@@ -35,7 +34,7 @@ async def optimize_path(body: OptimizePathIn, request: Request) -> OptimalPathOu
         return OptimalPathOut(mode="exploration")
 
     similarity = match["similarity"]
-    if similarity < SIMILARITY_THRESHOLD:
+    if similarity < threshold:
         log.info(
             "optimize_exploration",
             reason="below_threshold",

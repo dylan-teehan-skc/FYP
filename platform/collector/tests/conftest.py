@@ -48,7 +48,7 @@ class MockEmbeddingService:
         self._model = "test-model"
 
     async def generate(self, text: str) -> list[float]:
-        return [0.1] * 768
+        return [0.1] * 1536
 
 
 @pytest.fixture
@@ -66,6 +66,7 @@ def app(mock_db: MockDatabase, mock_embedding_service: MockEmbeddingService):
     """Create a test app with mocked dependencies."""
     settings = Settings(database_url="postgresql://test:test@localhost/test")
     test_app = create_app(settings)
+    test_app.state.settings = settings
     test_app.state.db = mock_db
     test_app.state.embedding_service = mock_embedding_service
     return test_app

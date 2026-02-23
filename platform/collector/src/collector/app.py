@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     embedding_service = EmbeddingService(model=settings.embedding_model)
     await db.connect()
+    app.state.settings = settings
     app.state.db = db
     app.state.embedding_service = embedding_service
     yield

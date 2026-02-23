@@ -30,7 +30,7 @@
     "retry_delay_seconds": 2
   },
   "mode_selector": {
-    "similarity_threshold": 0.90,
+    "similarity_threshold": 0.60,
     "min_executions": 10,
     "min_success_rate": 0.85
   }

@@ -15,7 +15,7 @@ class TestSettings:
 
     def test_analysis_defaults(self) -> None:
         s = Settings()
-        assert s.similarity_threshold == 0.90
+        assert s.similarity_threshold == 0.60
         assert s.min_success_rate == 0.85
         assert s.min_executions == 3
         assert s.bottleneck_threshold_pct == 0.40

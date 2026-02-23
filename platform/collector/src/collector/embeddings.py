@@ -14,14 +14,13 @@ class EmbeddingService:
         self._model = model
 
     async def generate(self, text: str) -> list[float] | None:
-        """Generate a 768-dim embedding vector. Returns None on failure."""
+        """Generate a 1536-dim embedding vector. Returns None on failure."""
         try:
             import litellm
 
             response = await litellm.aembedding(
                 model=self._model,
                 input=[text],
-                dimensions=768,
             )
             embedding: list[float] = response.data[0]["embedding"]
             log.info("embedding_generated", model=self._model, dimensions=len(embedding))

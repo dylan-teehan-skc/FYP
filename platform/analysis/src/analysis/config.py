@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Analysis tuning
-    similarity_threshold: float = 0.90
+    similarity_threshold: float = 0.60
     min_success_rate: float = 0.85
     min_executions: int = 3
     bottleneck_threshold_pct: float = 0.40

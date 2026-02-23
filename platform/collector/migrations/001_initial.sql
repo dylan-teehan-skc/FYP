@@ -45,7 +45,7 @@ CREATE INDEX IF NOT EXISTS idx_event_logs_agent_name ON event_logs(agent_name);
 CREATE TABLE IF NOT EXISTS workflow_embeddings (
     workflow_id         UUID PRIMARY KEY,
     task_description    TEXT NOT NULL,
-    embedding           VECTOR(768),
+    embedding           VECTOR(1536),
     model_version       VARCHAR(100) NOT NULL DEFAULT '',
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS optimal_paths (
     avg_steps           DOUBLE PRECISION NOT NULL DEFAULT 0.0,
     success_rate        DOUBLE PRECISION NOT NULL DEFAULT 0.0,
     execution_count     INTEGER NOT NULL DEFAULT 0,
-    embedding           VECTOR(768),
+    embedding           VECTOR(1536),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
