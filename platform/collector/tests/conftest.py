@@ -48,7 +48,7 @@ class MockEmbeddingService:
         self._model = "test-model"
 
     async def generate(self, text: str) -> list[float]:
-        return [0.1] * 1536
+        return [0.1] * 768
 
 
 @pytest.fixture

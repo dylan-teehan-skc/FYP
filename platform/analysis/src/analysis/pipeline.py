@@ -79,8 +79,10 @@ async def run_analysis_for_cluster(
     # 8. Generate suggestions
     suggestions = generate_suggestions(patterns, optimal_path, traces)
 
-    # 9. Upsert optimal path to DB
+    # 9. Upsert optimal path to DB (attach embedding from cluster for similarity search)
     if optimal_path:
+        if not optimal_path.embedding and workflow_ids:
+            optimal_path.embedding = await db.fetch_embedding_for_workflow(workflow_ids[0])
         await db.upsert_optimal_path({
             "path_id": optimal_path.path_id,
             "task_cluster": task_cluster,
@@ -88,7 +90,7 @@ async def run_analysis_for_cluster(
             "avg_duration_ms": optimal_path.avg_duration_ms,
             "avg_steps": optimal_path.avg_steps,
             "success_rate": optimal_path.success_rate,
-            "execution_count": optimal_path.execution_count,
+            "execution_count": len(traces),  # cluster size, not exact-match count
             "embedding": optimal_path.embedding,
         })
 
@@ -196,3 +198,7 @@ def run_cli() -> None:
             await db.disconnect()
 
     asyncio.run(_main())
+
+
+if __name__ == "__main__":
+    run_cli()

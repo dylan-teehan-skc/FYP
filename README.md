@@ -36,10 +36,24 @@ public-docs/             Architecture and design documentation.
 
 - Python 3.11+
 - Docker (for PostgreSQL 16 + pgvector)
+- A Gemini API key (`GEMINI_API_KEY`) — used for both LLM reasoning and embeddings
 - If you have a local PostgreSQL running on port 5432, stop it first — Docker needs that port:
   ```bash
   brew services stop postgresql@17   # or whichever version
   ```
+
+### Environment variables
+
+Create a `.env` file in the project root (or export these in your shell):
+
+```bash
+# Required — used by agent-runtime (LLM reasoning) and collector/analysis (embeddings)
+GEMINI_API_KEY=your-gemini-api-key-here
+
+# Optional — override the default embedding model
+# EMBEDDING_MODEL=text-embedding-3-small   # requires OPENAI_API_KEY
+# OPENAI_API_KEY=your-openai-key-here
+```
 
 ### Install dependencies
 
@@ -124,7 +138,7 @@ async with optimizer.trace("Handle refund for order ORD-789") as trace:
 | Layer | Technology |
 |-------|-----------|
 | Backend | Python 3.11+, FastAPI, asyncio, asyncpg, Pydantic v2, LiteLLM |
-| Database | PostgreSQL 16 + pgvector (VECTOR(1536), HNSW indexes) |
+| Database | PostgreSQL 16 + pgvector (VECTOR(768), HNSW indexes) |
 | Frontend | Next.js, React, react-flow, recharts, Tailwind CSS |
 | Analysis | PM4Py (process mining), networkx (DAGs), pgvector (semantic search), pandas |
 | Testing | pytest, pytest-asyncio, pytest-cov, ruff |
@@ -154,6 +168,10 @@ The demo simulates NovaTech Electronics, a company handling customer support tic
 | Denied refund | T-1003 | refund_request | 6 |
 | VIP complaint | T-1004 | complaint | 6 |
 | Product troubleshooting | T-1005 | product_support | 4 |
+
+## Limitations
+
+**Embedding model**: The platform currently uses Gemini `gemini-embedding-001` (768-dim, via `dimensions=768`) for semantic search to keep the entire platform on a single API key. OpenAI's `text-embedding-3-small` (1536-dim) is the preferred model — it ranks higher on the MTEB benchmark, and the similarity threshold (0.60) was originally calibrated for its cosine similarity distribution. To switch, set `EMBEDDING_MODEL=text-embedding-3-small` and `OPENAI_API_KEY` in your environment, then run the database migration to upgrade to `VECTOR(1536)`.
 
 ## Documentation
 

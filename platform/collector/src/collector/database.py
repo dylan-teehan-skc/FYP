@@ -142,7 +142,7 @@ class Database:
     async def find_similar_paths(
         self,
         embedding: list[float],
-        min_executions: int = 10,
+        min_executions: int = 30,
         min_success_rate: float = 0.85,
     ) -> asyncpg.Record | None:
         """Semantic search for optimal path using pgvector cosine similarity."""
@@ -208,11 +208,16 @@ class Database:
         }
 
 
+def _to_uuid(value: Any) -> UUID:
+    """Convert a string or UUID to UUID (idempotent)."""
+    return value if isinstance(value, UUID) else UUID(value)
+
+
 def _event_to_args(event: dict[str, Any]) -> list[Any]:
     """Convert event dict to positional args for INSERT query."""
     return [
-        UUID(event["event_id"]),
-        UUID(event["workflow_id"]),
+        _to_uuid(event["event_id"]),
+        _to_uuid(event["workflow_id"]),
         event["timestamp"],
         event["activity"],
         event["agent_name"],
@@ -229,5 +234,5 @@ def _event_to_args(event: dict[str, Any]) -> list[Any]:
         event.get("status", "success"),
         event.get("error_message"),
         event.get("step_number", 0),
-        UUID(event["parent_event_id"]) if event.get("parent_event_id") else None,
+        _to_uuid(event["parent_event_id"]) if event.get("parent_event_id") else None,
     ]

@@ -11,9 +11,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://collector:collector_dev@localhost:5432/workflow_optimizer"
     database_pool_min: int = 2
     database_pool_max: int = 10
-    embedding_model: str = "text-embedding-3-small"
+    embedding_model: str = "gemini/gemini-embedding-001"
     log_level: str = "INFO"
-    similarity_threshold: float = 0.60
+    similarity_threshold: float = 0.85
     host: str = "0.0.0.0"
     port: int = 9000
 

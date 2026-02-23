@@ -11,16 +11,16 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://collector:collector_dev@localhost:5432/workflow_optimizer"
     database_pool_min: int = 2
     database_pool_max: int = 10
-    embedding_model: str = "text-embedding-3-small"
+    embedding_model: str = "gemini/gemini-embedding-001"
     log_level: str = "INFO"
 
     # Analysis tuning
-    similarity_threshold: float = 0.60
+    similarity_threshold: float = 0.85
     min_success_rate: float = 0.85
     min_executions: int = 3
     bottleneck_threshold_pct: float = 0.40
     redundancy_min_calls: int = 2
-    edit_distance_threshold: int = 2
+    edit_distance_threshold: int = 4
 
     model_config = {"env_prefix": "", "case_sensitive": False}
 

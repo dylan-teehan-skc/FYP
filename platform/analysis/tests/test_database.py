@@ -101,7 +101,7 @@ class TestWriteQueries:
             "avg_steps": 2.0,
             "success_rate": 0.95,
             "execution_count": 10,
-            "embedding": [0.1] * 1536,
+            "embedding": [0.1] * 768,
         }
         await db.upsert_optimal_path(path_data)
         assert mock_conn.execute.call_count == 2  # DELETE + INSERT
