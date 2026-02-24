@@ -21,19 +21,22 @@ from demo_runner import (
 
 
 class TestScenarioDefinitions:
-    def test_five_scenarios_defined(self) -> None:
-        assert len(SCENARIOS) == 5
+    def test_ten_scenarios_defined(self) -> None:
+        assert len(SCENARIOS) == 10
 
     def test_all_scenarios_have_required_fields(self) -> None:
+        valid_types = {
+            "refund_request", "order_inquiry", "complaint",
+            "product_support", "warranty_claim", "shipping_inquiry",
+            "cancellation",
+        }
         for s in SCENARIOS:
             assert s.ticket_id.startswith("T-")
             assert s.order_id.startswith("ORD-")
             assert s.customer_id.startswith("C-")
-            assert s.workflow_type in {
-                "refund_request", "order_inquiry", "complaint", "product_support",
-            }
+            assert s.workflow_type in valid_types
             assert len(s.task_description) > 20
-            assert s.expected_steps in {4, 6}
+            assert s.expected_steps >= 4
 
     def test_unique_ticket_ids(self) -> None:
         ids = [s.ticket_id for s in SCENARIOS]

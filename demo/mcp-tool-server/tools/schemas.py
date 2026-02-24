@@ -109,4 +109,94 @@ TOOLS = [
             "required": ["query"],
         },
     },
+    {
+        "name": "escalate_ticket",
+        "description": "Escalate a support ticket to a supervisor with a reason",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticket_id": {
+                    "type": "string",
+                    "description": "The ticket ID to escalate",
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Reason for escalation",
+                },
+            },
+            "required": ["ticket_id", "reason"],
+        },
+    },
+    {
+        "name": "apply_discount",
+        "description": "Apply a percentage discount to a customer order",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "order_id": {
+                    "type": "string",
+                    "description": "The order ID to apply discount to",
+                },
+                "discount_percent": {
+                    "type": "number",
+                    "description": "Discount percentage (1-50)",
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Reason for the discount",
+                },
+            },
+            "required": ["order_id", "discount_percent"],
+        },
+    },
+    {
+        "name": "check_warranty",
+        "description": "Check warranty status and coverage for an order",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "order_id": {
+                    "type": "string",
+                    "description": "The order ID to check warranty for",
+                },
+            },
+            "required": ["order_id"],
+        },
+    },
+    {
+        "name": "get_shipping_status",
+        "description": "Get shipping and tracking information for an order",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "order_id": {
+                    "type": "string",
+                    "description": "The order ID to get shipping info for",
+                },
+            },
+            "required": ["order_id"],
+        },
+    },
+    {
+        "name": "schedule_callback",
+        "description": "Schedule a phone callback for a customer",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "customer_id": {
+                    "type": "string",
+                    "description": "The customer ID",
+                },
+                "preferred_time": {
+                    "type": "string",
+                    "description": "Preferred callback time",
+                },
+                "topic": {
+                    "type": "string",
+                    "description": "Topic for the callback",
+                },
+            },
+            "required": ["customer_id", "topic"],
+        },
+    },
 ]

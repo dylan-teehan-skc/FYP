@@ -39,6 +39,30 @@ CUSTOMERS = {
         "email": "emma.wilson@email.com",
         "tier": "standard",
     },
+    "C-106": {
+        "customer_id": "C-106",
+        "name": "Frank Torres",
+        "email": "frank.torres@email.com",
+        "tier": "gold",
+    },
+    "C-107": {
+        "customer_id": "C-107",
+        "name": "Grace Patel",
+        "email": "grace.patel@email.com",
+        "tier": "standard",
+    },
+    "C-108": {
+        "customer_id": "C-108",
+        "name": "Henry Nakamura",
+        "email": "henry.nakamura@email.com",
+        "tier": "platinum",
+    },
+    "C-109": {
+        "customer_id": "C-109",
+        "name": "Ivy Johansson",
+        "email": "ivy.johansson@email.com",
+        "tier": "standard",
+    },
 }
 
 INITIAL_ORDERS = {
@@ -86,6 +110,60 @@ INITIAL_ORDERS = {
         "status": "delivered",
         "days_since_delivery": 7,
         "payment_method": "debit_card",
+    },
+    "ORD-5006": {
+        "order_id": "ORD-5006",
+        "customer_id": "C-106",
+        "product": "Smart Watch Pro",
+        "amount": 299.99,
+        "status": "delivered",
+        "days_since_delivery": 10,
+        "payment_method": "credit_card",
+    },
+    "ORD-5007": {
+        "order_id": "ORD-5007",
+        "customer_id": "C-107",
+        "product": "Portable Charger",
+        "amount": 49.99,
+        "status": "shipped",
+        "days_since_delivery": None,
+        "payment_method": "paypal",
+    },
+    "ORD-5008": {
+        "order_id": "ORD-5008",
+        "customer_id": "C-108",
+        "product": "4K Webcam Ultra",
+        "amount": 189.99,
+        "status": "delivered",
+        "days_since_delivery": 45,
+        "payment_method": "credit_card",
+    },
+    "ORD-5009": {
+        "order_id": "ORD-5009",
+        "customer_id": "C-109",
+        "product": "Wireless Mouse",
+        "amount": 39.99,
+        "status": "delivered",
+        "days_since_delivery": 5,
+        "payment_method": "debit_card",
+    },
+    "ORD-5010": {
+        "order_id": "ORD-5010",
+        "customer_id": "C-106",
+        "product": "Laptop Stand Deluxe",
+        "amount": 129.99,
+        "status": "processing",
+        "days_since_delivery": None,
+        "payment_method": "credit_card",
+    },
+    "ORD-5011": {
+        "order_id": "ORD-5011",
+        "customer_id": "C-108",
+        "product": "Mechanical Keyboard",
+        "amount": 179.99,
+        "status": "delivered",
+        "days_since_delivery": 3,
+        "payment_method": "credit_card",
     },
 }
 
@@ -135,9 +213,74 @@ INITIAL_TICKETS = {
         "subject": "Cannot pair Wireless Headphones with phone",
         "created_at": _days_ago(1),
     },
+    "T-1006": {
+        "ticket_id": "T-1006",
+        "customer_id": "C-106",
+        "order_id": "ORD-5006",
+        "type": "product_support",
+        "status": "open",
+        "subject": "Smart Watch not charging after a week",
+        "created_at": _days_ago(1),
+    },
+    "T-1007": {
+        "ticket_id": "T-1007",
+        "customer_id": "C-107",
+        "order_id": "ORD-5007",
+        "type": "order_inquiry",
+        "status": "open",
+        "subject": "Where is my package?",
+        "created_at": _days_ago(1),
+    },
+    "T-1008": {
+        "ticket_id": "T-1008",
+        "customer_id": "C-108",
+        "order_id": "ORD-5008",
+        "type": "complaint",
+        "status": "open",
+        "subject": "Webcam image quality poor, want resolution",
+        "created_at": _days_ago(1),
+    },
+    "T-1009": {
+        "ticket_id": "T-1009",
+        "customer_id": "C-109",
+        "order_id": "ORD-5009",
+        "type": "complaint",
+        "status": "open",
+        "subject": "Received wrong color mouse",
+        "created_at": _days_ago(1),
+    },
+    "T-1010": {
+        "ticket_id": "T-1010",
+        "customer_id": "C-106",
+        "order_id": "ORD-5010",
+        "type": "order_inquiry",
+        "status": "open",
+        "subject": "Cancel my laptop stand order",
+        "created_at": _days_ago(1),
+    },
 }
 
 REFUND_WINDOW_DAYS = 30
+WARRANTY_DAYS = 365
+
+SHIPPING_INFO = {
+    "ORD-5002": {
+        "order_id": "ORD-5002",
+        "carrier": "FedEx",
+        "tracking_number": "FX-9281736450",
+        "status": "in_transit",
+        "estimated_delivery": _days_ago(-2),
+        "last_location": "Distribution Center, Chicago IL",
+    },
+    "ORD-5007": {
+        "order_id": "ORD-5007",
+        "carrier": "UPS",
+        "tracking_number": "UPS-7463829105",
+        "status": "in_transit",
+        "estimated_delivery": _days_ago(-1),
+        "last_location": "Sorting Facility, Denver CO",
+    },
+}
 
 KNOWLEDGE_BASE = {
     "KB-001": {
@@ -202,5 +345,35 @@ KNOWLEDGE_BASE = {
             "contact support with your order number."
         ),
         "keywords": ["shipping", "delivery", "tracking", "express", "arrival", "transit"],
+    },
+    "KB-006": {
+        "article_id": "KB-006",
+        "title": "Warranty Claims Process",
+        "content": (
+            "To file a warranty claim: 1. Check warranty status using the order ID. "
+            "2. Verify the reported issue falls under warranty coverage. "
+            "3. If covered, offer repair or replacement at no charge. "
+            "4. If the claim is complex or involves a high-value item, "
+            "escalate to a supervisor for approval. "
+            "5. Gold and Platinum customers receive expedited warranty service."
+        ),
+        "keywords": [
+            "warranty", "claim", "repair", "replacement",
+            "coverage", "defect", "escalate",
+        ],
+    },
+    "KB-007": {
+        "article_id": "KB-007",
+        "title": "Order Cancellation Policy",
+        "content": (
+            "Orders in 'processing' status can be cancelled immediately with a full refund. "
+            "Orders that have already shipped cannot be cancelled — "
+            "the customer must wait for delivery and then initiate a return. "
+            "To cancel, verify the order status first, then confirm with the customer."
+        ),
+        "keywords": [
+            "cancel", "cancellation", "processing",
+            "shipped", "return", "order",
+        ],
     },
 }

@@ -120,9 +120,9 @@ SCENARIOS: list[Scenario] = [
         customer_id="C-104",
         workflow_type="complaint",
         task_description=(
-            "Support ticket T-1004: Customer David Kim is unhappy with "
-            "order ORD-5004 (Noise-Cancelling Headphones, $349.99) and "
-            "has filed a complaint. Please resolve this ticket."
+            "Support ticket T-1004: Customer David Kim has an issue "
+            "with order ORD-5004 (Noise-Cancelling Headphones, "
+            "$349.99). Please resolve this ticket."
         ),
         expected_steps=6,
     ),
@@ -132,11 +132,71 @@ SCENARIOS: list[Scenario] = [
         customer_id="C-105",
         workflow_type="product_support",
         task_description=(
-            "Support ticket T-1005: Customer Emma Wilson needs help "
-            "pairing her Wireless Headphones from order ORD-5005 "
-            "($99.99). Please resolve this ticket."
+            "Support ticket T-1005: Customer Emma Wilson is having "
+            "trouble with her Wireless Headphones from order "
+            "ORD-5005 ($99.99). Please resolve this ticket."
         ),
         expected_steps=4,
+    ),
+    Scenario(
+        ticket_id="T-1006",
+        order_id="ORD-5006",
+        customer_id="C-106",
+        workflow_type="warranty_claim",
+        task_description=(
+            "Support ticket T-1006: Frank Torres says his Smart "
+            "Watch Pro from order ORD-5006 stopped charging after "
+            "a week. He's frustrated. Please resolve this ticket."
+        ),
+        expected_steps=7,
+    ),
+    Scenario(
+        ticket_id="T-1007",
+        order_id="ORD-5007",
+        customer_id="C-107",
+        workflow_type="shipping_inquiry",
+        task_description=(
+            "Support ticket T-1007: Grace Patel wants to know where "
+            "her Portable Charger is. Order ORD-5007. "
+            "Please resolve this ticket."
+        ),
+        expected_steps=5,
+    ),
+    Scenario(
+        ticket_id="T-1008",
+        order_id="ORD-5008",
+        customer_id="C-108",
+        workflow_type="complaint",
+        task_description=(
+            "Support ticket T-1008: Henry Nakamura is unhappy with "
+            "his 4K Webcam Ultra from order ORD-5008. Image quality "
+            "is not what he expected. Please resolve this ticket."
+        ),
+        expected_steps=8,
+    ),
+    Scenario(
+        ticket_id="T-1009",
+        order_id="ORD-5009",
+        customer_id="C-109",
+        workflow_type="complaint",
+        task_description=(
+            "Support ticket T-1009: Ivy Johansson received the wrong "
+            "color Wireless Mouse from order ORD-5009. "
+            "Please resolve this ticket."
+        ),
+        expected_steps=6,
+    ),
+    Scenario(
+        ticket_id="T-1010",
+        order_id="ORD-5010",
+        customer_id="C-106",
+        workflow_type="cancellation",
+        task_description=(
+            "Support ticket T-1010: Frank Torres wants to cancel his "
+            "Laptop Stand Deluxe from order ORD-5010. "
+            "Please resolve this ticket."
+        ),
+        expected_steps=5,
     ),
 ]
 
