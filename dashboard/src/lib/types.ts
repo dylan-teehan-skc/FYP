@@ -1,0 +1,140 @@
+export interface AnalyticsSummary {
+  total_workflows: number;
+  total_events: number;
+  avg_duration_ms: number | null;
+  avg_steps: number | null;
+  success_rate: number | null;
+  top_tools: ToolStat[];
+}
+
+export interface ToolStat {
+  tool_name: string;
+  call_count: number;
+  avg_duration_ms: number;
+}
+
+export interface WorkflowListItem {
+  workflow_id: string;
+  task_description: string;
+  status: string;
+  mode: string;
+  duration_ms: number;
+  steps: number;
+  timestamp: string;
+}
+
+export interface WorkflowListResponse {
+  workflows: WorkflowListItem[];
+  total: number;
+}
+
+export interface EventOut {
+  event_id: string;
+  workflow_id: string;
+  timestamp: string;
+  activity: string;
+  agent_name: string;
+  agent_role: string;
+  tool_name: string | null;
+  tool_parameters: Record<string, unknown>;
+  tool_response: Record<string, unknown>;
+  llm_model: string;
+  llm_prompt_tokens: number;
+  llm_completion_tokens: number;
+  llm_reasoning: string;
+  duration_ms: number;
+  cost_usd: number;
+  status: string;
+  error_message: string | null;
+  step_number: number;
+  parent_event_id: string | null;
+}
+
+export interface TraceOut {
+  workflow_id: string;
+  events: EventOut[];
+  total_events: number;
+}
+
+export interface OptimalPath {
+  path_id: string;
+  task_cluster: string;
+  tool_sequence: string[];
+  avg_duration_ms: number;
+  avg_steps: number;
+  success_rate: number;
+  execution_count: number;
+  updated_at: string;
+}
+
+export interface OptimalPathsResponse {
+  paths: OptimalPath[];
+}
+
+export interface ModeDistribution {
+  exploration: number;
+  guided: number;
+  total: number;
+}
+
+export interface ModeStats {
+  avg_duration_ms: number;
+  avg_steps: number;
+  success_rate: number;
+  count: number;
+}
+
+export interface ComparisonResponse {
+  exploration: ModeStats;
+  guided: ModeStats;
+}
+
+export interface TimelinePoint {
+  date: string;
+  workflows: number;
+  avg_duration_ms: number;
+  success_rate: number;
+  guided_pct: number;
+}
+
+export interface TimelineResponse {
+  points: TimelinePoint[];
+}
+
+export interface GraphNode {
+  id: string;
+  label: string;
+  avg_duration_ms: number;
+  call_count: number;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  weight: number;
+}
+
+export interface ExecutionGraphResponse {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface BottleneckTool {
+  tool_name: string;
+  call_count: number;
+  avg_duration_ms: number;
+  total_cost_usd: number;
+  avg_calls_per_workflow: number;
+}
+
+export interface BottlenecksResponse {
+  tools: BottleneckTool[];
+}
+
+export interface SavingsResponse {
+  time_saved_ms: number;
+  cost_saved_usd: number;
+  pct_duration_improvement: number;
+  pct_steps_improvement: number;
+  pct_success_improvement: number;
+}
