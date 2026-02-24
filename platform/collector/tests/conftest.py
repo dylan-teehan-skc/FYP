@@ -62,6 +62,14 @@ class MockDatabase:
             "pct_steps_improvement": 0.0,
             "pct_success_improvement": 0.0,
         })
+        self.list_task_clusters = AsyncMock(return_value=[])
+        self.get_cluster_workflows = AsyncMock(return_value={
+            "path": None, "workflows": [], "mode_stats": None,
+        })
+        self.get_cluster_execution_graph = AsyncMock(
+            return_value={"nodes": [], "edges": []}
+        )
+        self.get_cluster_bottlenecks = AsyncMock(return_value=[])
 
     async def _insert_event(self, event: dict[str, Any]) -> None:
         self.events.append(event)
