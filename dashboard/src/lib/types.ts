@@ -138,3 +138,51 @@ export interface SavingsResponse {
   pct_steps_improvement: number;
   pct_success_improvement: number;
 }
+
+// === Task Cluster types ===
+
+export interface TaskClusterSummary {
+  path_id: string;
+  task_cluster: string;
+  tool_sequence: string[];
+  avg_duration_ms: number | null;
+  avg_steps: number | null;
+  success_rate: number | null;
+  execution_count: number;
+  workflow_count: number;
+  updated_at: string;
+}
+
+export interface TaskClustersResponse {
+  clusters: TaskClusterSummary[];
+}
+
+export interface ClusterWorkflow {
+  workflow_id: string;
+  task_description: string | null;
+  similarity: number;
+  status: string;
+  duration_ms: number | null;
+  steps: number | null;
+  mode: string;
+  timestamp: string;
+  cost_usd: number | null;
+}
+
+export interface ClusterModeStats {
+  exploration: ModeStats;
+  guided: ModeStats;
+}
+
+export interface ClusterDetailResponse {
+  path_id: string;
+  task_cluster: string;
+  tool_sequence: string[];
+  avg_duration_ms: number | null;
+  avg_steps: number | null;
+  success_rate: number | null;
+  execution_count: number;
+  updated_at: string;
+  workflows: ClusterWorkflow[];
+  mode_stats: ClusterModeStats;
+}

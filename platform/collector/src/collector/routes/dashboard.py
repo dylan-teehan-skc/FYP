@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from collector.logger import get_logger
 from collector.models import (
     BottlenecksOut,
+    ClusterDetailOut,
+    ClusterModeStats,
+    ClusterWorkflow,
     ComparisonOut,
     ExecutionGraphOut,
     ModeDistributionOut,
@@ -16,6 +19,8 @@ from collector.models import (
     OptimalPathRow,
     OptimalPathsOut,
     SavingsOut,
+    TaskClustersOut,
+    TaskClusterSummary,
     TimelineOut,
     TimelinePoint,
     WorkflowListOut,
@@ -158,3 +163,82 @@ async def get_savings(request: Request) -> SavingsOut:
         cost_saved_usd=data["cost_saved_usd"],
     )
     return SavingsOut(**data)
+
+
+@router.get("/task-clusters")
+async def list_task_clusters(request: Request) -> TaskClustersOut:
+    """Return all discovered task clusters with summary stats."""
+    db = request.app.state.db
+    rows = await db.list_task_clusters()
+    clusters = [
+        TaskClusterSummary(
+            path_id=row["path_id"],
+            task_cluster=row["task_cluster"],
+            tool_sequence=list(row["tool_sequence"]),
+            avg_duration_ms=_fopt(row.get("avg_duration_ms")),
+            avg_steps=_fopt(row.get("avg_steps")),
+            success_rate=_fopt(row.get("success_rate")),
+            execution_count=row["execution_count"],
+            workflow_count=row["workflow_count"],
+            updated_at=row.get("updated_at"),
+        )
+        for row in rows
+    ]
+    log.info("list_task_clusters", count=len(clusters))
+    return TaskClustersOut(clusters=clusters)
+
+
+@router.get("/task-clusters/{path_id}/workflows")
+async def get_cluster_detail(path_id: str, request: Request) -> ClusterDetailOut:
+    """Return the optimal path and all matching workflows for a cluster."""
+    db = request.app.state.db
+    data = await db.get_cluster_workflows(path_id)
+
+    if data["path"] is None:
+        raise HTTPException(status_code=404, detail="Task cluster not found")
+
+    path = data["path"]
+    workflows = [
+        ClusterWorkflow(
+            workflow_id=row["workflow_id"],
+            task_description=row.get("task_description"),
+            similarity=round(float(row["similarity"]), 4),
+            status=row["status"],
+            duration_ms=_fopt(row.get("duration_ms")),
+            steps=row.get("steps"),
+            mode="guided" if row.get("is_guided") else "exploration",
+            timestamp=row["timestamp"],
+            cost_usd=_fopt(row.get("total_cost_usd")),
+        )
+        for row in data["workflows"]
+    ]
+
+    ms = data.get("mode_stats") or {}
+    mode_stats = ClusterModeStats(
+        exploration=ModeStats(
+            avg_duration_ms=_fopt(ms.get("exp_avg_duration")),
+            avg_steps=_fopt(ms.get("exp_avg_steps")),
+            success_rate=_fopt(ms.get("exp_success_rate")),
+            count=ms.get("exp_count") or 0,
+        ),
+        guided=ModeStats(
+            avg_duration_ms=_fopt(ms.get("gui_avg_duration")),
+            avg_steps=_fopt(ms.get("gui_avg_steps")),
+            success_rate=_fopt(ms.get("gui_success_rate")),
+            count=ms.get("gui_count") or 0,
+        ),
+    )
+
+    log.info("cluster_detail", path_id=path_id, workflows=len(workflows))
+    return ClusterDetailOut(
+        path_id=path["path_id"],
+        task_cluster=path["task_cluster"],
+        tool_sequence=list(path["tool_sequence"]),
+        avg_duration_ms=_fopt(path.get("avg_duration_ms")),
+        avg_steps=_fopt(path.get("avg_steps")),
+        success_rate=_fopt(path.get("success_rate")),
+        execution_count=path["execution_count"],
+        updated_at=path.get("updated_at"),
+        workflows=workflows,
+        mode_stats=mode_stats,
+    )

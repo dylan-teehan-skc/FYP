@@ -1,11 +1,13 @@
 import type {
   AnalyticsSummary,
   BottlenecksResponse,
+  ClusterDetailResponse,
   ComparisonResponse,
   ExecutionGraphResponse,
   ModeDistribution,
   OptimalPathsResponse,
   SavingsResponse,
+  TaskClustersResponse,
   TimelineResponse,
   TraceOut,
   WorkflowListResponse,
@@ -45,4 +47,9 @@ export const api = {
   getBottlenecks: () => fetchApi<BottlenecksResponse>("/analytics/bottlenecks"),
 
   getSavings: () => fetchApi<SavingsResponse>("/analytics/savings"),
+
+  getTaskClusters: () => fetchApi<TaskClustersResponse>("/task-clusters"),
+
+  getClusterDetail: (pathId: string) =>
+    fetchApi<ClusterDetailResponse>(`/task-clusters/${pathId}/workflows`),
 };

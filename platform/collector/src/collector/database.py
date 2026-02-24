@@ -426,6 +426,139 @@ class Database:
             """
         )
 
+    async def list_task_clusters(self) -> list[asyncpg.Record]:
+        """Fetch all task clusters with summary stats and matching workflow count."""
+        return await self.fetch(
+            """SELECT
+                op.path_id::text,
+                op.task_cluster,
+                op.tool_sequence,
+                op.avg_duration_ms,
+                op.avg_steps,
+                op.success_rate,
+                op.execution_count,
+                op.updated_at,
+                (
+                    SELECT COUNT(*)
+                    FROM workflow_embeddings we
+                    WHERE op.embedding IS NOT NULL
+                      AND we.embedding IS NOT NULL
+                      AND 1 - (we.embedding <=> op.embedding) >= 0.60
+                ) AS workflow_count
+            FROM optimal_paths op
+            ORDER BY op.execution_count DESC
+            """
+        )
+
+    async def get_cluster_workflows(
+        self,
+        path_id: str,
+        similarity_threshold: float = 0.60,
+    ) -> dict[str, Any]:
+        """Get optimal path and all matching workflows for a task cluster."""
+        path_row = await self.fetchrow(
+            """SELECT
+                path_id::text, task_cluster, tool_sequence,
+                avg_duration_ms, avg_steps, success_rate,
+                execution_count, embedding, updated_at
+            FROM optimal_paths
+            WHERE path_id = $1
+            """,
+            UUID(path_id),
+        )
+        if path_row is None:
+            return {"path": None, "workflows": [], "mode_stats": None}
+
+        embedding = path_row["embedding"]
+        if embedding is None:
+            return {"path": dict(path_row), "workflows": [], "mode_stats": None}
+
+        workflow_rows = await self.fetch(
+            """WITH matched_workflows AS (
+                SELECT
+                    we.workflow_id,
+                    we.task_description,
+                    1 - (we.embedding <=> $1::vector) AS similarity
+                FROM workflow_embeddings we
+                WHERE we.embedding IS NOT NULL
+                  AND 1 - (we.embedding <=> $1::vector) >= $2
+            ),
+            mode_map AS (
+                SELECT
+                    workflow_id,
+                    MAX(CASE WHEN activity = 'optimize:guided' THEN 1 ELSE 0 END) AS is_guided
+                FROM event_logs
+                WHERE activity IN ('optimize:guided', 'optimize:exploration')
+                GROUP BY workflow_id
+            )
+            SELECT
+                mw.workflow_id::text,
+                mw.task_description,
+                mw.similarity,
+                el.status,
+                el.duration_ms,
+                el.step_number AS steps,
+                el.timestamp,
+                COALESCE(mm.is_guided, 0) AS is_guided,
+                cost_agg.total_cost_usd
+            FROM matched_workflows mw
+            JOIN event_logs el ON el.workflow_id = mw.workflow_id
+                AND el.activity = 'workflow:complete'
+            LEFT JOIN mode_map mm ON mm.workflow_id = mw.workflow_id
+            LEFT JOIN LATERAL (
+                SELECT SUM(cost_usd) AS total_cost_usd
+                FROM event_logs
+                WHERE workflow_id = mw.workflow_id
+            ) cost_agg ON true
+            ORDER BY el.timestamp DESC
+            """,
+            str(embedding),
+            similarity_threshold,
+        )
+
+        mode_stats_row = await self.fetchrow(
+            """WITH matched_workflows AS (
+                SELECT we.workflow_id
+                FROM workflow_embeddings we
+                WHERE we.embedding IS NOT NULL
+                  AND 1 - (we.embedding <=> $1::vector) >= $2
+            ),
+            mode_map AS (
+                SELECT
+                    workflow_id,
+                    MAX(CASE WHEN activity = 'optimize:guided' THEN 1 ELSE 0 END) AS is_guided
+                FROM event_logs
+                WHERE activity IN ('optimize:guided', 'optimize:exploration')
+                GROUP BY workflow_id
+            )
+            SELECT
+                AVG(el.duration_ms)
+                    FILTER (WHERE COALESCE(mm.is_guided, 0) = 0) AS exp_avg_duration,
+                AVG(el.step_number)
+                    FILTER (WHERE COALESCE(mm.is_guided, 0) = 0) AS exp_avg_steps,
+                AVG(CASE WHEN el.status = 'success' THEN 1.0 ELSE 0.0 END)
+                    FILTER (WHERE COALESCE(mm.is_guided, 0) = 0) AS exp_success_rate,
+                COUNT(*) FILTER (WHERE COALESCE(mm.is_guided, 0) = 0) AS exp_count,
+                AVG(el.duration_ms) FILTER (WHERE mm.is_guided = 1) AS gui_avg_duration,
+                AVG(el.step_number) FILTER (WHERE mm.is_guided = 1) AS gui_avg_steps,
+                AVG(CASE WHEN el.status = 'success' THEN 1.0 ELSE 0.0 END)
+                    FILTER (WHERE mm.is_guided = 1) AS gui_success_rate,
+                COUNT(*) FILTER (WHERE mm.is_guided = 1) AS gui_count
+            FROM matched_workflows mw
+            JOIN event_logs el ON el.workflow_id = mw.workflow_id
+                AND el.activity = 'workflow:complete'
+            LEFT JOIN mode_map mm ON mm.workflow_id = mw.workflow_id
+            """,
+            str(embedding),
+            similarity_threshold,
+        )
+
+        return {
+            "path": dict(path_row),
+            "workflows": [dict(r) for r in workflow_rows],
+            "mode_stats": dict(mode_stats_row) if mode_stats_row else None,
+        }
+
     async def get_savings(self) -> dict[str, Any]:
         """Calculate cumulative time and cost savings (guided vs exploration)."""
         row = await self.fetchrow(

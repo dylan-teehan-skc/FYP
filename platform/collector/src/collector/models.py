@@ -254,3 +254,62 @@ class SavingsOut(BaseModel):
     pct_duration_improvement: float
     pct_steps_improvement: float
     pct_success_improvement: float
+
+
+# === Task Cluster models ===
+
+
+class TaskClusterSummary(BaseModel):
+    """Summary row for GET /task-clusters."""
+
+    path_id: str
+    task_cluster: str
+    tool_sequence: list[str]
+    avg_duration_ms: float | None
+    avg_steps: float | None
+    success_rate: float | None
+    execution_count: int
+    workflow_count: int
+    updated_at: datetime | None
+
+
+class TaskClustersOut(BaseModel):
+    """Response for GET /task-clusters."""
+
+    clusters: list[TaskClusterSummary]
+
+
+class ClusterWorkflow(BaseModel):
+    """Single workflow run within a task cluster."""
+
+    workflow_id: str
+    task_description: str | None
+    similarity: float
+    status: str
+    duration_ms: float | None
+    steps: int | None
+    mode: str
+    timestamp: datetime
+    cost_usd: float | None
+
+
+class ClusterModeStats(BaseModel):
+    """Exploration vs guided stats scoped to a single cluster."""
+
+    exploration: ModeStats
+    guided: ModeStats
+
+
+class ClusterDetailOut(BaseModel):
+    """Response for GET /task-clusters/{path_id}/workflows."""
+
+    path_id: str
+    task_cluster: str
+    tool_sequence: list[str]
+    avg_duration_ms: float | None
+    avg_steps: float | None
+    success_rate: float | None
+    execution_count: int
+    updated_at: datetime | None
+    workflows: list[ClusterWorkflow]
+    mode_stats: ClusterModeStats
