@@ -7,12 +7,13 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from collector.config import Settings, get_settings
 from collector.database import Database
 from collector.embeddings import EmbeddingService
 from collector.logger import get_logger, init_logging
-from collector.routes import analytics, events, optimize, workflows
+from collector.routes import actions, analytics, dashboard, events, optimize, workflows
 
 
 @asynccontextmanager
@@ -44,10 +45,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.include_router(events.router)
     app.include_router(workflows.router)
     app.include_router(optimize.router)
     app.include_router(analytics.router)
+    app.include_router(dashboard.router)
+    app.include_router(actions.router)
     return app
 
 

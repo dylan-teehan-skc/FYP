@@ -46,6 +46,12 @@ class ReasoningEngine:
                 if result["action"] is not None or attempt == self._MAX_JSON_RETRIES:
                     result["prompt_tokens"] = response.usage.prompt_tokens
                     result["completion_tokens"] = response.usage.completion_tokens
+                    try:
+                        result["cost_usd"] = litellm.completion_cost(
+                            completion_response=response
+                        )
+                    except Exception:
+                        result["cost_usd"] = 0.0
                     return result
 
                 self.log.warning(
@@ -65,6 +71,7 @@ class ReasoningEngine:
                     "parameters": {},
                     "prompt_tokens": 0,
                     "completion_tokens": 0,
+                    "cost_usd": 0.0,
                 }
 
         return {
@@ -73,6 +80,7 @@ class ReasoningEngine:
             "parameters": {},
             "prompt_tokens": 0,
             "completion_tokens": 0,
+            "cost_usd": 0.0,
         }
 
     def _parse_response(self, text: str) -> dict[str, Any]:

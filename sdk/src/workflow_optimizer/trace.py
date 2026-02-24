@@ -163,6 +163,21 @@ class TraceContext:
             parent_event_id=parent_event_id,
         )
 
+    def emit_mode(self, mode: str) -> None:
+        """Emit an optimize:guided or optimize:exploration event."""
+        if not self._active:
+            msg = "Cannot emit mode outside active trace"
+            raise TraceStateError(msg)
+        event = WorkflowEvent(
+            workflow_id=self._workflow_id,
+            activity=f"optimize:{mode}",
+            agent_name=self._agent_name,
+            agent_role=self._agent_role,
+            step_number=0,
+        )
+        self._transport.enqueue(event)
+        logger.debug("Mode event emitted, workflow_id=%s, mode=%s", self._workflow_id, mode)
+
     async def __aenter__(self) -> TraceContext:
         if not self._transport._opened:
             await self._transport.open()

@@ -15,6 +15,9 @@ class StateManager:
         self.tickets = copy.deepcopy(INITIAL_TICKETS)
         self.processed_refunds: dict[str, dict] = {}
         self.sent_messages: list[dict] = []
+        self.escalated_tickets: dict[str, str] = {}
+        self.applied_discounts: dict[str, dict] = {}
+        self.scheduled_callbacks: list[dict] = []
 
     def get_order(self, order_id: str) -> dict | None:
         return self.orders.get(order_id)
@@ -61,4 +64,50 @@ class StateManager:
             "sent_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
         self.sent_messages.append(record)
+        return record
+
+    def escalate_ticket(self, ticket_id: str, reason: str) -> dict | None:
+        ticket = self.tickets.get(ticket_id)
+        if ticket is None:
+            return None
+        ticket["status"] = "escalated"
+        self.escalated_tickets[ticket_id] = reason
+        return {
+            "ticket_id": ticket_id,
+            "status": "escalated",
+            "reason": reason,
+            "escalated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+
+    def apply_discount(
+        self, order_id: str, discount_percent: float, reason: str
+    ) -> dict | None:
+        order = self.orders.get(order_id)
+        if order is None:
+            return None
+        original = order["amount"]
+        discounted = round(original * (1 - discount_percent / 100), 2)
+        record = {
+            "order_id": order_id,
+            "original_amount": original,
+            "discount_percent": discount_percent,
+            "new_amount": discounted,
+            "reason": reason,
+            "applied_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        self.applied_discounts[order_id] = record
+        return record
+
+    def schedule_callback(
+        self, customer_id: str, preferred_time: str, topic: str
+    ) -> dict:
+        cb_id = f"CB-{len(self.scheduled_callbacks) + 1:04d}"
+        record = {
+            "callback_id": cb_id,
+            "customer_id": customer_id,
+            "preferred_time": preferred_time,
+            "topic": topic,
+            "scheduled_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        self.scheduled_callbacks.append(record)
         return record

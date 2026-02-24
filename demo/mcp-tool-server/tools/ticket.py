@@ -1,4 +1,4 @@
-"""Ticket tools: check_ticket_status, close_ticket."""
+"""Ticket tools: check_ticket_status, close_ticket, escalate_ticket."""
 
 
 def check_ticket_status(arguments: dict, state) -> dict:
@@ -33,4 +33,24 @@ def close_ticket(arguments: dict, state) -> dict:
         "status": "closed",
         "resolution_summary": resolution_summary,
         "closed_at": updated["closed_at"],
+    }
+
+
+def escalate_ticket(arguments: dict, state) -> dict:
+    ticket_id = arguments.get("ticket_id")
+    reason = arguments.get("reason", "")
+
+    ticket = state.get_ticket(ticket_id)
+    if ticket is None:
+        return {"error": f"Ticket {ticket_id} not found"}
+    if ticket["status"] == "escalated":
+        return {"error": f"Ticket {ticket_id} is already escalated"}
+
+    result = state.escalate_ticket(ticket_id, reason)
+    return {
+        "ticket_id": result["ticket_id"],
+        "status": "escalated",
+        "reason": reason,
+        "escalated_at": result["escalated_at"],
+        "message": "Ticket has been escalated to a supervisor",
     }

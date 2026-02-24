@@ -53,6 +53,7 @@ class LastDecision:
     reasoning: str = ""
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    cost_usd: float = 0.0
 
 
 @dataclass
@@ -83,10 +84,9 @@ SCENARIOS: list[Scenario] = [
         customer_id="C-101",
         workflow_type="refund_request",
         task_description=(
-            "Handle support ticket T-1001: Customer Alice Chen requests a refund "
-            "for order ORD-5001 (Wireless Earbuds Pro, $79.99). Check ticket status, "
-            "look up the order, check refund eligibility, process refund if eligible, "
-            "notify the customer, and close the ticket."
+            "Support ticket T-1001: Customer Alice Chen wants a refund for "
+            "order ORD-5001 (Wireless Earbuds Pro, $79.99). "
+            "Please resolve this ticket."
         ),
         expected_steps=6,
     ),
@@ -96,10 +96,9 @@ SCENARIOS: list[Scenario] = [
         customer_id="C-102",
         workflow_type="order_inquiry",
         task_description=(
-            "Handle support ticket T-1002: Customer Bob Martinez inquires about "
-            "order ORD-5002 status (USB-C Hub Dock, $249.99). Check ticket status, "
-            "look up the order, inform the customer of the current status, and "
-            "close the ticket."
+            "Support ticket T-1002: Customer Bob Martinez is asking about "
+            "the status of order ORD-5002 (USB-C Hub Dock, $249.99). "
+            "Please resolve this ticket."
         ),
         expected_steps=4,
     ),
@@ -109,10 +108,9 @@ SCENARIOS: list[Scenario] = [
         customer_id="C-103",
         workflow_type="refund_request",
         task_description=(
-            "Handle support ticket T-1003: Customer Carol Johnson requests a refund "
-            "for order ORD-5003 (Bluetooth Speaker, $159.00). Check ticket status, "
-            "look up the order, check refund eligibility, if denied search for "
-            "the refund policy to explain, notify the customer, and close the ticket."
+            "Support ticket T-1003: Customer Carol Johnson is requesting "
+            "a refund for order ORD-5003 (Bluetooth Speaker, $159.00). "
+            "Please resolve this ticket."
         ),
         expected_steps=6,
     ),
@@ -122,11 +120,9 @@ SCENARIOS: list[Scenario] = [
         customer_id="C-104",
         workflow_type="complaint",
         task_description=(
-            "Handle support ticket T-1004: VIP customer David Kim complains about "
-            "order ORD-5004 (Noise-Cancelling Headphones, $349.99). Check ticket "
-            "status, look up customer history to see VIP tier, look up the order, "
-            "search the knowledge base for VIP handling policy, send a resolution "
-            "message, and close the ticket."
+            "Support ticket T-1004: Customer David Kim has an issue "
+            "with order ORD-5004 (Noise-Cancelling Headphones, "
+            "$349.99). Please resolve this ticket."
         ),
         expected_steps=6,
     ),
@@ -136,12 +132,71 @@ SCENARIOS: list[Scenario] = [
         customer_id="C-105",
         workflow_type="product_support",
         task_description=(
-            "Handle support ticket T-1005: Customer Emma Wilson needs help pairing "
-            "her Wireless Headphones from order ORD-5005 ($99.99). Check ticket "
-            "status, search the knowledge base for pairing instructions, send the "
-            "instructions to the customer, and close the ticket."
+            "Support ticket T-1005: Customer Emma Wilson is having "
+            "trouble with her Wireless Headphones from order "
+            "ORD-5005 ($99.99). Please resolve this ticket."
         ),
         expected_steps=4,
+    ),
+    Scenario(
+        ticket_id="T-1006",
+        order_id="ORD-5006",
+        customer_id="C-106",
+        workflow_type="warranty_claim",
+        task_description=(
+            "Support ticket T-1006: Frank Torres says his Smart "
+            "Watch Pro from order ORD-5006 stopped charging after "
+            "a week. He's frustrated. Please resolve this ticket."
+        ),
+        expected_steps=7,
+    ),
+    Scenario(
+        ticket_id="T-1007",
+        order_id="ORD-5007",
+        customer_id="C-107",
+        workflow_type="shipping_inquiry",
+        task_description=(
+            "Support ticket T-1007: Grace Patel wants to know where "
+            "her Portable Charger is. Order ORD-5007. "
+            "Please resolve this ticket."
+        ),
+        expected_steps=5,
+    ),
+    Scenario(
+        ticket_id="T-1008",
+        order_id="ORD-5008",
+        customer_id="C-108",
+        workflow_type="complaint",
+        task_description=(
+            "Support ticket T-1008: Henry Nakamura is unhappy with "
+            "his 4K Webcam Ultra from order ORD-5008. Image quality "
+            "is not what he expected. Please resolve this ticket."
+        ),
+        expected_steps=8,
+    ),
+    Scenario(
+        ticket_id="T-1009",
+        order_id="ORD-5009",
+        customer_id="C-109",
+        workflow_type="complaint",
+        task_description=(
+            "Support ticket T-1009: Ivy Johansson received the wrong "
+            "color Wireless Mouse from order ORD-5009. "
+            "Please resolve this ticket."
+        ),
+        expected_steps=6,
+    ),
+    Scenario(
+        ticket_id="T-1010",
+        order_id="ORD-5010",
+        customer_id="C-106",
+        workflow_type="cancellation",
+        task_description=(
+            "Support ticket T-1010: Frank Torres wants to cancel his "
+            "Laptop Stand Deluxe from order ORD-5010. "
+            "Please resolve this ticket."
+        ),
+        expected_steps=5,
     ),
 ]
 
@@ -182,6 +237,7 @@ class TracingReasoningEngine:
         self._last_decision.reasoning = result.get("reasoning", "")
         self._last_decision.prompt_tokens = result.get("prompt_tokens", 0)
         self._last_decision.completion_tokens = result.get("completion_tokens", 0)
+        self._last_decision.cost_usd = result.get("cost_usd", 0.0)
         self._total_prompt_tokens += self._last_decision.prompt_tokens
         self._total_completion_tokens += self._last_decision.completion_tokens
         return result
@@ -227,6 +283,7 @@ class TracingMCPClient:
             llm_completion_tokens=self._last_decision.completion_tokens,
             llm_reasoning=self._last_decision.reasoning,
         ) as step:
+            step.set_cost(self._last_decision.cost_usd)
             result = await self._inner.call_tool(tool_name, parameters)
             if result["success"]:
                 step.set_response(result.get("result", {}))
@@ -279,25 +336,19 @@ def build_guided_context(response: OptimalPathResponse) -> str:
     if response.mode != "guided" or not response.path:
         return ""
 
-    steps = " -> ".join(response.path)
+    numbered = "\n".join(f"  {i}. {tool}" for i, tool in enumerate(response.path, 1))
     parts = [
-        "GUIDED MODE: An optimal execution path has been identified for this task type.",
-        f"Recommended tool sequence: {steps}",
+        "OPTIMIZATION HINT: A proven tool sequence for this type of task:",
+        numbered,
     ]
     if response.success_rate is not None and response.execution_count is not None:
         parts.append(
-            f"This path has a {response.success_rate:.0%} success rate "
-            f"across {response.execution_count} previous executions."
-        )
-    if response.avg_duration_ms is not None and response.avg_steps is not None:
-        parts.append(
-            f"Average duration: {response.avg_duration_ms:.0f}ms, "
-            f"average steps: {response.avg_steps:.1f}."
+            f"({response.success_rate:.0%} success rate, "
+            f"{response.execution_count} previous runs)"
         )
     parts.append(
-        "Follow this sequence unless you have a specific reason to deviate. "
-        "Execute each tool in order, using information from previous steps to "
-        "fill parameters for subsequent tools."
+        "Execute tools in this order. Skip any tool that already "
+        "shows [SUCCESS] in your execution history."
     )
     return "\n".join(parts)
 
@@ -363,6 +414,7 @@ async def run_scenario(
             agent_name="SupportAgent",
             agent_role="customer_support",
         ) as trace:
+            trace.emit_mode(mode)
             tracing_mcp.set_trace(trace)
             try:
                 result = await agent.execute(scenario.task_description, context=context)
@@ -421,6 +473,8 @@ async def run_round(
     """Run all scenarios for one round concurrently (structured concurrency)."""
     log = get_logger("demo_runner")
     log.info("round_start", round=round_number, total_rounds=total_rounds)
+
+    await mcp_client.reset_state()
 
     shuffled = list(scenarios)
     random.shuffle(shuffled)

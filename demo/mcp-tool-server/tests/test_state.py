@@ -4,11 +4,11 @@
 
 class TestStateManagerInit:
     def test_orders_loaded(self, state):
-        assert len(state.orders) == 5
+        assert len(state.orders) == 11
         assert "ORD-5001" in state.orders
 
     def test_tickets_loaded(self, state):
-        assert len(state.tickets) == 5
+        assert len(state.tickets) == 10
         assert "T-1001" in state.tickets
 
     def test_no_refunds_initially(self, state):

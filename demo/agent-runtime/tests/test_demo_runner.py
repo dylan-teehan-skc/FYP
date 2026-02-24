@@ -21,19 +21,22 @@ from demo_runner import (
 
 
 class TestScenarioDefinitions:
-    def test_five_scenarios_defined(self) -> None:
-        assert len(SCENARIOS) == 5
+    def test_ten_scenarios_defined(self) -> None:
+        assert len(SCENARIOS) == 10
 
     def test_all_scenarios_have_required_fields(self) -> None:
+        valid_types = {
+            "refund_request", "order_inquiry", "complaint",
+            "product_support", "warranty_claim", "shipping_inquiry",
+            "cancellation",
+        }
         for s in SCENARIOS:
             assert s.ticket_id.startswith("T-")
             assert s.order_id.startswith("ORD-")
             assert s.customer_id.startswith("C-")
-            assert s.workflow_type in {
-                "refund_request", "order_inquiry", "complaint", "product_support",
-            }
+            assert s.workflow_type in valid_types
             assert len(s.task_description) > 20
-            assert s.expected_steps in {4, 6}
+            assert s.expected_steps >= 4
 
     def test_unique_ticket_ids(self) -> None:
         ids = [s.ticket_id for s in SCENARIOS]
@@ -65,12 +68,13 @@ class TestBuildGuidedContext:
             avg_steps=3.0,
         )
         result = build_guided_context(response)
-        assert "GUIDED MODE" in result
-        assert "check_ticket -> get_order -> process_refund" in result
+        assert "OPTIMIZATION HINT" in result
+        assert "1. check_ticket" in result
+        assert "2. get_order" in result
+        assert "3. process_refund" in result
         assert "95%" in result
-        assert "20" in result
-        assert "2500ms" in result
-        assert "3.0" in result
+        assert "20 previous runs" in result
+        assert "Skip any tool" in result
 
     def test_guided_partial_metrics(self) -> None:
         response = OptimalPathResponse(
@@ -78,9 +82,9 @@ class TestBuildGuidedContext:
             path=["tool_a", "tool_b"],
         )
         result = build_guided_context(response)
-        assert "GUIDED MODE" in result
-        assert "tool_a -> tool_b" in result
-        assert "success rate" not in result.lower() or "None" not in result
+        assert "OPTIMIZATION HINT" in result
+        assert "1. tool_a" in result
+        assert "2. tool_b" in result
 
 
 # ---------------------------------------------------------------------------

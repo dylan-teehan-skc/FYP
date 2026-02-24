@@ -214,6 +214,19 @@ class TestFindParetoPaths:
         results = find_pareto_paths(g, traces, "c", min_success_rate=0.99)
         assert len(results) >= 1
 
+    def test_fallback_filtered_by_success_rate(self) -> None:
+        """Fallback paths with low success rate are excluded."""
+        g = nx.DiGraph()
+        g.add_edge(START_NODE, "a", success_rate=0.1)
+        g.add_edge("a", END_NODE, success_rate=0.1)
+        traces = [
+            _trace(wf_id="1", tools=["a"], success=False),
+            _trace(wf_id="2", tools=["a"], success=False),
+            _trace(wf_id="3", tools=["a"], success=False),
+        ]
+        results = find_pareto_paths(g, traces, "c", min_success_rate=0.85)
+        assert results == []
+
     def test_empty_graph_empty_traces(self) -> None:
         g = nx.DiGraph()
         g.add_node(START_NODE)

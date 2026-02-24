@@ -20,7 +20,7 @@ class TestSettings:
         assert s.min_executions == 3
         assert s.bottleneck_threshold_pct == 0.40
         assert s.redundancy_min_calls == 2
-        assert s.edit_distance_threshold == 4
+        assert s.ned_threshold == 0.55
 
     def test_custom_values(self) -> None:
         s = Settings(

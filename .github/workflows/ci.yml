@@ -100,6 +100,21 @@ jobs:
         working-directory: platform/collector
         run: .venv/bin/python -m pytest tests/ --cov=collector --cov-fail-under=90 -q
 
+  test-dashboard:
+    name: Test Dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        working-directory: dashboard
+        run: npm ci
+      - name: Run tests
+        working-directory: dashboard
+        run: npm test
+
   test-analysis:
     name: Test Analysis Engine
     runs-on: ubuntu-latest

@@ -1,10 +1,17 @@
 """Tool dispatcher for the MCP tool server."""
 
-from tools.customer import get_customer_history, send_customer_message
+from tools.customer import (
+    apply_discount,
+    get_customer_history,
+    schedule_callback,
+    send_customer_message,
+)
 from tools.knowledge import search_knowledge_base
 from tools.order import check_refund_eligibility, get_order_details, process_refund
 from tools.schemas import TOOLS
-from tools.ticket import check_ticket_status, close_ticket
+from tools.shipping import get_shipping_status
+from tools.ticket import check_ticket_status, close_ticket, escalate_ticket
+from tools.warranty import check_warranty
 
 _DISPATCH = {
     "check_ticket_status": check_ticket_status,
@@ -15,6 +22,11 @@ _DISPATCH = {
     "close_ticket": close_ticket,
     "get_customer_history": get_customer_history,
     "search_knowledge_base": search_knowledge_base,
+    "escalate_ticket": escalate_ticket,
+    "apply_discount": apply_discount,
+    "check_warranty": check_warranty,
+    "get_shipping_status": get_shipping_status,
+    "schedule_callback": schedule_callback,
 }
 
 

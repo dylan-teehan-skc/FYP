@@ -33,6 +33,43 @@ class MockDatabase:
         })
         self.connect = AsyncMock()
         self.disconnect = AsyncMock()
+        self.list_workflows = AsyncMock(return_value={"workflows": [], "total": 0})
+        self.list_optimal_paths = AsyncMock(return_value=[])
+        self.get_mode_distribution = AsyncMock(
+            return_value={"exploration": 0, "guided": 0, "total": 0}
+        )
+        self.get_mode_comparison = AsyncMock(return_value={
+            "exploration": {
+                "avg_duration_ms": None,
+                "avg_steps": None,
+                "success_rate": None,
+                "count": 0,
+            },
+            "guided": {
+                "avg_duration_ms": None,
+                "avg_steps": None,
+                "success_rate": None,
+                "count": 0,
+            },
+        })
+        self.get_timeline = AsyncMock(return_value=[])
+        self.get_execution_graph = AsyncMock(return_value={"nodes": [], "edges": []})
+        self.get_bottlenecks = AsyncMock(return_value=[])
+        self.get_savings = AsyncMock(return_value={
+            "time_saved_ms": 0.0,
+            "cost_saved_usd": 0.0,
+            "pct_duration_improvement": 0.0,
+            "pct_steps_improvement": 0.0,
+            "pct_success_improvement": 0.0,
+        })
+        self.list_task_clusters = AsyncMock(return_value=[])
+        self.get_cluster_workflows = AsyncMock(return_value={
+            "path": None, "workflows": [], "mode_stats": None,
+        })
+        self.get_cluster_execution_graph = AsyncMock(
+            return_value={"nodes": [], "edges": []}
+        )
+        self.get_cluster_bottlenecks = AsyncMock(return_value=[])
 
     async def _insert_event(self, event: dict[str, Any]) -> None:
         self.events.append(event)

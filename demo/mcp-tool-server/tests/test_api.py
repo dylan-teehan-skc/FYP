@@ -18,7 +18,7 @@ class TestListTools:
         assert response.status_code == 200
         data = response.json()
         assert "tools" in data
-        assert len(data["tools"]) == 8
+        assert len(data["tools"]) == 13
 
     def test_tool_has_schema(self):
         response = client.get("/tools/list")

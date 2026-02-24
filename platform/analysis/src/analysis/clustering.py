@@ -5,6 +5,9 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+from scipy.cluster.hierarchy import fcluster, linkage
+
 from analysis.logger import get_logger
 from analysis.models import WorkflowTrace
 
@@ -41,6 +44,14 @@ def edit_distance(seq_a: list[str], seq_b: list[str]) -> int:
                 dp[j] = 1 + min(prev, dp[j], dp[j - 1])
             prev = temp
     return dp[n]
+
+
+def normalized_edit_distance(seq_a: list[str], seq_b: list[str]) -> float:
+    """Normalized edit distance in [0, 1]; 0 = identical, 1 = maximally different."""
+    if not seq_a and not seq_b:
+        return 0.0
+    raw = edit_distance(seq_a, seq_b)
+    return (2 * raw) / (len(seq_a) + len(seq_b))
 
 
 def assign_cluster_label(descriptions: list[str]) -> str:
@@ -113,38 +124,34 @@ async def cluster_by_embedding(
 
 def subcluster_by_trace(
     traces: list[WorkflowTrace],
-    max_edit_distance: int = 2,
+    ned_threshold: float = 0.55,
 ) -> dict[str, list[WorkflowTrace]]:
-    """Within a semantic cluster, sub-cluster by trace structure (edit distance).
+    """Within a semantic cluster, sub-cluster by trace structure.
 
-    Level 2 clustering: Levenshtein distance on tool sequences.
+    Level 2 clustering: Hierarchical Agglomerative Clustering (HAC) with
+    average linkage on a Normalized Edit Distance matrix.
     Returns {sub_label: [traces...]}.
     """
     if not traces:
         return {}
+    if len(traces) == 1:
+        return {"subcluster_0": traces}
 
-    assigned: set[int] = set()
+    n = len(traces)
+    condensed = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            condensed.append(normalized_edit_distance(
+                traces[i].tool_sequence, traces[j].tool_sequence,
+            ))
+
+    z = linkage(np.array(condensed), method="average")
+    labels = fcluster(z, t=ned_threshold, criterion="distance")
+
     subclusters: dict[str, list[WorkflowTrace]] = {}
-    sub_idx = 0
-
-    for i, trace in enumerate(traces):
-        if i in assigned:
-            continue
-
-        group = [trace]
-        assigned.add(i)
-
-        for j in range(i + 1, len(traces)):
-            if j in assigned:
-                continue
-            dist = edit_distance(trace.tool_sequence, traces[j].tool_sequence)
-            if dist <= max_edit_distance:
-                group.append(traces[j])
-                assigned.add(j)
-
-        label = f"subcluster_{sub_idx}"
-        subclusters[label] = group
-        sub_idx += 1
+    for trace, label in zip(traces, labels):
+        key = f"subcluster_{label - 1}"
+        subclusters.setdefault(key, []).append(trace)
 
     log.info("trace_subclusters", count=len(subclusters))
     return subclusters
