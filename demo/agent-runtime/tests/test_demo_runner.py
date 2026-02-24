@@ -65,12 +65,13 @@ class TestBuildGuidedContext:
             avg_steps=3.0,
         )
         result = build_guided_context(response)
-        assert "GUIDED MODE" in result
-        assert "check_ticket -> get_order -> process_refund" in result
+        assert "OPTIMIZATION HINT" in result
+        assert "1. check_ticket" in result
+        assert "2. get_order" in result
+        assert "3. process_refund" in result
         assert "95%" in result
-        assert "20" in result
-        assert "2500ms" in result
-        assert "3.0" in result
+        assert "20 previous runs" in result
+        assert "Skip any tool" in result
 
     def test_guided_partial_metrics(self) -> None:
         response = OptimalPathResponse(
@@ -78,9 +79,9 @@ class TestBuildGuidedContext:
             path=["tool_a", "tool_b"],
         )
         result = build_guided_context(response)
-        assert "GUIDED MODE" in result
-        assert "tool_a -> tool_b" in result
-        assert "success rate" not in result.lower() or "None" not in result
+        assert "OPTIMIZATION HINT" in result
+        assert "1. tool_a" in result
+        assert "2. tool_b" in result
 
 
 # ---------------------------------------------------------------------------

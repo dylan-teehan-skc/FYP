@@ -53,6 +53,7 @@ class LastDecision:
     reasoning: str = ""
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    cost_usd: float = 0.0
 
 
 @dataclass
@@ -182,6 +183,7 @@ class TracingReasoningEngine:
         self._last_decision.reasoning = result.get("reasoning", "")
         self._last_decision.prompt_tokens = result.get("prompt_tokens", 0)
         self._last_decision.completion_tokens = result.get("completion_tokens", 0)
+        self._last_decision.cost_usd = result.get("cost_usd", 0.0)
         self._total_prompt_tokens += self._last_decision.prompt_tokens
         self._total_completion_tokens += self._last_decision.completion_tokens
         return result
@@ -227,6 +229,7 @@ class TracingMCPClient:
             llm_completion_tokens=self._last_decision.completion_tokens,
             llm_reasoning=self._last_decision.reasoning,
         ) as step:
+            step.set_cost(self._last_decision.cost_usd)
             result = await self._inner.call_tool(tool_name, parameters)
             if result["success"]:
                 step.set_response(result.get("result", {}))
@@ -279,25 +282,19 @@ def build_guided_context(response: OptimalPathResponse) -> str:
     if response.mode != "guided" or not response.path:
         return ""
 
-    steps = " -> ".join(response.path)
+    numbered = "\n".join(f"  {i}. {tool}" for i, tool in enumerate(response.path, 1))
     parts = [
-        "GUIDED MODE: An optimal execution path has been identified for this task type.",
-        f"Recommended tool sequence: {steps}",
+        "OPTIMIZATION HINT: A proven tool sequence for this type of task:",
+        numbered,
     ]
     if response.success_rate is not None and response.execution_count is not None:
         parts.append(
-            f"This path has a {response.success_rate:.0%} success rate "
-            f"across {response.execution_count} previous executions."
-        )
-    if response.avg_duration_ms is not None and response.avg_steps is not None:
-        parts.append(
-            f"Average duration: {response.avg_duration_ms:.0f}ms, "
-            f"average steps: {response.avg_steps:.1f}."
+            f"({response.success_rate:.0%} success rate, "
+            f"{response.execution_count} previous runs)"
         )
     parts.append(
-        "Follow this sequence unless you have a specific reason to deviate. "
-        "Execute each tool in order, using information from previous steps to "
-        "fill parameters for subsequent tools."
+        "Execute tools in this order. Skip any tool that already "
+        "shows [SUCCESS] in your execution history."
     )
     return "\n".join(parts)
 
@@ -421,6 +418,8 @@ async def run_round(
     """Run all scenarios for one round concurrently (structured concurrency)."""
     log = get_logger("demo_runner")
     log.info("round_start", round=round_number, total_rounds=total_rounds)
+
+    await mcp_client.reset_state()
 
     shuffled = list(scenarios)
     random.shuffle(shuffled)

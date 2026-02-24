@@ -44,8 +44,8 @@ class LoggingConfig(BaseModel):
 class AgentConfig(BaseModel):
     """Agent behavior configuration."""
 
-    loop_detection_window: int = Field(default=5, ge=1)
-    loop_detection_threshold: int = Field(default=3, ge=1)
+    loop_detection_window: int = Field(default=6, ge=1)
+    loop_detection_threshold: int = Field(default=4, ge=1)
 
 
 class MCPConfig(BaseModel):

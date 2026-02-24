@@ -184,6 +184,14 @@ def find_pareto_paths(
         for path in tool_paths
     ]
 
+    # Filter out paths below minimum success rate
+    candidates = [
+        (p, m) for p, m in candidates if m["success_rate"] >= min_success_rate
+    ]
+    if not candidates:
+        log.info("no_viable_paths", cluster=task_cluster)
+        return []
+
     # Pareto front
     pareto = compute_pareto_front(candidates)
 

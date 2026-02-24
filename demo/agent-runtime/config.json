@@ -20,8 +20,8 @@
     }
   },
   "agent": {
-    "loop_detection_window": 5,
-    "loop_detection_threshold": 3
+    "loop_detection_window": 6,
+    "loop_detection_threshold": 4
   },
   "mcp": {
     "server_url": "http://localhost:8000",

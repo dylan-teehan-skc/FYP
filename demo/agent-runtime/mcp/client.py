@@ -76,6 +76,8 @@ class MCPClient:
                     response.raise_for_status()
                     self.log.info("tool_called", tool=tool_name)
                     result = await response.json()
+                    if "error" in result:
+                        return {"success": False, "error": result["error"]}
                     return {"success": True, "result": result}
             except aiohttp.ClientError as e:
                 last_error = str(e)
@@ -87,6 +89,19 @@ class MCPClient:
             "success": False,
             "error": f"Failed after {self.max_retries} attempts: {last_error}",
         }
+
+    async def reset_state(self) -> bool:
+        """Reset the MCP server state to initial values."""
+        if not self._session:
+            raise MCPConnectionError("Not connected to MCP server")
+        try:
+            async with self._session.post(f"{self.server_url}/reset") as response:
+                response.raise_for_status()
+                self.log.info("state_reset")
+                return True
+        except aiohttp.ClientError as e:
+            self.log.warning("state_reset_failed", error=str(e))
+            return False
 
     def get_tools_documentation(self) -> str:
         """Format tools for inclusion in agent prompts."""

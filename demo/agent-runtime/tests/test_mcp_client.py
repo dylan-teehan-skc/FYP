@@ -186,6 +186,70 @@ class TestMCPClient:
 
         assert doc == "No tools available."
 
+    @pytest.mark.asyncio
+    async def test_call_tool_error_in_response(self, client: MCPClient) -> None:
+        """Test that tool responses with 'error' key are treated as failures."""
+        with aioresponses() as mocked:
+            mocked.get(
+                "http://localhost:8000/tools/list",
+                payload={"tools": [{"name": "close_ticket", "description": ""}]},
+            )
+            mocked.post(
+                "http://localhost:8000/tools/call",
+                payload={"error": "Ticket T-1001 is already closed"},
+            )
+
+            await client.connect()
+            result = await client.call_tool("close_ticket", {"ticket_id": "T-1001"})
+
+            assert result["success"] is False
+            assert result["error"] == "Ticket T-1001 is already closed"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_reset_state_success(self, client: MCPClient) -> None:
+        """Test successful state reset."""
+        with aioresponses() as mocked:
+            mocked.get(
+                "http://localhost:8000/tools/list",
+                payload={"tools": []},
+            )
+            mocked.post(
+                "http://localhost:8000/reset",
+                payload={"status": "reset"},
+            )
+
+            await client.connect()
+            result = await client.reset_state()
+
+            assert result is True
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_reset_state_failure(self, client: MCPClient) -> None:
+        """Test state reset failure handling."""
+        with aioresponses() as mocked:
+            mocked.get(
+                "http://localhost:8000/tools/list",
+                payload={"tools": []},
+            )
+            mocked.post("http://localhost:8000/reset", status=500)
+
+            await client.connect()
+            result = await client.reset_state()
+
+            assert result is False
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_reset_state_not_connected(self, client: MCPClient) -> None:
+        """Test state reset when not connected."""
+        with pytest.raises(MCPConnectionError):
+            await client.reset_state()
+
     def test_get_tools_documentation(self, client: MCPClient) -> None:
         """Test tools documentation formatting."""
         client.available_tools = [

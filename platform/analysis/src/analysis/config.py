@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     min_executions: int = 3
     bottleneck_threshold_pct: float = 0.40
     redundancy_min_calls: int = 2
-    edit_distance_threshold: int = 4
+    ned_threshold: float = 0.55
 
     model_config = {"env_prefix": "", "case_sensitive": False}
 

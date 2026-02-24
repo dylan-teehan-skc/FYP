@@ -9,6 +9,7 @@ from analysis.clustering import (
     cluster_by_embedding,
     cosine_similarity,
     edit_distance,
+    normalized_edit_distance,
     subcluster_by_trace,
 )
 from analysis.models import WorkflowTrace
@@ -70,6 +71,34 @@ class TestEditDistance:
 
     def test_one_empty(self) -> None:
         assert edit_distance(["a", "b"], []) == 2
+
+
+# ── normalized_edit_distance ─────────────────────────────────────────
+
+class TestNormalizedEditDistance:
+    def test_identical_sequences(self) -> None:
+        assert normalized_edit_distance(["a", "b"], ["a", "b"]) == 0.0
+
+    def test_completely_different(self) -> None:
+        assert normalized_edit_distance(["a", "b"], ["c", "d"]) == pytest.approx(1.0)
+
+    def test_one_insertion(self) -> None:
+        # edit_distance=1, lengths 2+3=5, NED = 2*1/5 = 0.4
+        assert normalized_edit_distance(["a", "b"], ["a", "c", "b"]) == pytest.approx(0.4)
+
+    def test_different_lengths(self) -> None:
+        # edit_distance=2, lengths 2+0=2, NED = 2*2/2 = 2.0 → clamped by formula
+        assert normalized_edit_distance(["a", "b"], []) == pytest.approx(2.0)
+
+    def test_both_empty(self) -> None:
+        assert normalized_edit_distance([], []) == 0.0
+
+    def test_length_normalized(self) -> None:
+        short_ned = normalized_edit_distance(["a", "b"], ["a", "c"])
+        long_ned = normalized_edit_distance(
+            ["a", "b", "c", "d"], ["a", "b", "c", "e"],
+        )
+        assert short_ned > long_ned
 
 
 # ── assign_cluster_label ─────────────────────────────────────────────
@@ -143,15 +172,32 @@ class TestSubclusterByTrace:
     def test_groups_similar_traces(self) -> None:
         t1 = _trace(wf_id="wf-1", tools=["a", "b"])
         t2 = _trace(wf_id="wf-2", tools=["a", "b"])
-        t3 = _trace(wf_id="wf-3", tools=["a", "b", "c"])  # edit_distance=1
-        result = subcluster_by_trace([t1, t2, t3], max_edit_distance=2)
+        t3 = _trace(wf_id="wf-3", tools=["a", "b", "c"])  # NED ≈ 0.4
+        result = subcluster_by_trace([t1, t2, t3], ned_threshold=0.5)
         assert len(result) == 1  # all in one cluster
 
     def test_splits_divergent_traces(self) -> None:
         t1 = _trace(wf_id="wf-1", tools=["a", "b"])
-        t2 = _trace(wf_id="wf-2", tools=["x", "y", "z"])  # edit_distance=3
-        result = subcluster_by_trace([t1, t2], max_edit_distance=1)
+        t2 = _trace(wf_id="wf-2", tools=["x", "y", "z"])  # NED ≈ 1.0
+        result = subcluster_by_trace([t1, t2], ned_threshold=0.5)
         assert len(result) == 2
 
     def test_empty_traces(self) -> None:
         assert subcluster_by_trace([]) == {}
+
+    def test_single_trace(self) -> None:
+        t1 = _trace(wf_id="wf-1", tools=["a", "b"])
+        result = subcluster_by_trace([t1])
+        assert len(result) == 1
+
+    def test_consolidates_with_more_data(self) -> None:
+        """HAC should produce fewer clusters than traces when sequences are similar."""
+        traces = [
+            _trace(wf_id=f"wf-{i}", tools=["a", "b", "c", "d", "e", "f"])
+            for i in range(10)
+        ] + [
+            _trace(wf_id=f"wf-{i+10}", tools=["a", "b", "c", "d", "e", "f", "g"])
+            for i in range(5)
+        ]
+        result = subcluster_by_trace(traces, ned_threshold=0.4)
+        assert len(result) <= 2  # similar sequences should consolidate

@@ -15,7 +15,7 @@ def sample_config() -> AppConfig:
         llm=LLMConfig(model="gpt-4"),
         logging=LoggingConfig(level="DEBUG"),
         mcp=MCPConfig(server_url="http://localhost:8000"),
-        agent=AgentConfig(loop_detection_threshold=3, loop_detection_window=5),
+        agent=AgentConfig(loop_detection_threshold=4, loop_detection_window=6),
     )
 
 

@@ -76,8 +76,8 @@ class TestAgentConfig:
 
     def test_defaults(self) -> None:
         config = AgentConfig()
-        assert config.loop_detection_threshold == 3
-        assert config.loop_detection_window == 5
+        assert config.loop_detection_threshold == 4
+        assert config.loop_detection_window == 6
 
     def test_custom_values(self) -> None:
         config = AgentConfig(loop_detection_threshold=5, loop_detection_window=10)
@@ -100,7 +100,7 @@ class TestAppConfig:
         assert config.llm.model == "gpt-4"
         assert config.mcp.server_url == "http://localhost:8000"
         assert config.logging.level == "INFO"
-        assert config.agent.loop_detection_threshold == 3
+        assert config.agent.loop_detection_threshold == 4
 
     def test_full_config(self, sample_config: AppConfig) -> None:
         assert sample_config.llm.model == "gpt-4"

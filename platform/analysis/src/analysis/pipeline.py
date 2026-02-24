@@ -143,7 +143,7 @@ async def run_analysis(
             traces.append(trace)
 
         subclusters = subcluster_by_trace(
-            traces, max_edit_distance=settings.edit_distance_threshold
+            traces, ned_threshold=settings.ned_threshold
         )
 
         for sub_label, sub_traces in subclusters.items():
