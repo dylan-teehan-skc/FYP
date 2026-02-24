@@ -5,10 +5,11 @@ import type { ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { DeltaCard } from "@/components/compare/delta-card";
 import { SavingsChart } from "@/components/compare/savings-chart";
+import { PerformanceOverTimeChart } from "@/components/compare/performance-over-time-chart";
 import { api } from "@/lib/api";
 import { formatDuration, formatPercent, formatNumber, formatCost } from "@/lib/format";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
-import type { ComparisonResponse, TimelineResponse } from "@/lib/types";
+import type { ComparisonResponse, TimelineResponse, WorkflowListResponse } from "@/lib/types";
 
 function SectionLabel({ children, tooltip }: { children: ReactNode; tooltip?: string }) {
   return (
@@ -76,13 +77,19 @@ function SkeletonCard() {
 export default function ComparePage() {
   const [comparison, setComparison] = useState<ComparisonResponse | null>(null);
   const [timeline, setTimeline] = useState<TimelineResponse | null>(null);
+  const [allWorkflows, setAllWorkflows] = useState<WorkflowListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([api.getComparison(), api.getTimeline()])
-      .then(([comp, tl]) => {
+    Promise.all([
+      api.getComparison(),
+      api.getTimeline(),
+      api.getWorkflows(500, 0),
+    ])
+      .then(([comp, tl, wfs]) => {
         setComparison(comp);
         setTimeline(tl);
+        setAllWorkflows(wfs);
       })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : "Failed to load data");
@@ -244,6 +251,18 @@ export default function ComparePage() {
           </>
         )}
       </div>
+
+      {/* Performance over time scatter chart */}
+      <Card className="mb-6 border-border bg-card">
+        <CardContent className="p-5">
+          <SectionLabel tooltip="Each dot is one workflow run. Exploration (blue) and guided (green) are separated vertically for clarity. Both charts share the same Y-axis scale. Trend lines show rolling averages.">Performance over time</SectionLabel>
+          {!allWorkflows ? (
+            <div className="h-[420px] animate-pulse rounded bg-muted" />
+          ) : (
+            <PerformanceOverTimeChart workflows={allWorkflows.workflows} />
+          )}
+        </CardContent>
+      </Card>
 
       {/* Savings over time */}
       <Card className="border-border bg-card">

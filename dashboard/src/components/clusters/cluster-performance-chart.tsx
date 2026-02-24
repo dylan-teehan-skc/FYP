@@ -263,15 +263,19 @@ export function ClusterPerformanceChart({
           name="Exploration"
           data={explorationData}
           fill="#60a5fa"
-          fillOpacity={0.8}
-          r={5}
+          fillOpacity={0.45}
+          r={4}
+          stroke="#60a5fa"
+          strokeOpacity={0.3}
         />
         <Scatter
           name="Guided"
           data={guidedData}
           fill="#34d399"
-          fillOpacity={0.8}
+          fillOpacity={0.9}
           r={5}
+          stroke="#059669"
+          strokeOpacity={0.6}
         />
 
         {explorationTrend.length >= 2 && (
@@ -280,6 +284,7 @@ export function ClusterPerformanceChart({
             dataKey="y"
             stroke="#3b82f6"
             strokeWidth={2}
+            strokeOpacity={0.5}
             dot={false}
             name="Exploration trend"
             legendType="none"
@@ -291,7 +296,7 @@ export function ClusterPerformanceChart({
             data={guidedTrend}
             dataKey="y"
             stroke="#10b981"
-            strokeWidth={2}
+            strokeWidth={2.5}
             dot={false}
             name="Guided trend"
             legendType="none"
