@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { formatNumber } from "@/lib/format";
 import type { AnalyticsSummary } from "@/lib/types";
-import { Database, Activity, Server } from "lucide-react";
+import { Database, Activity, Server, Play, FlaskConical, Loader2 } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 
 const THRESHOLDS = [
@@ -73,6 +74,17 @@ export default function SettingsPage() {
     "online" | "offline" | "checking"
   >("checking");
 
+  // Action states
+  const [analysisRunning, setAnalysisRunning] = useState(false);
+  const [analysisMsg, setAnalysisMsg] = useState<string | null>(null);
+  const [demoRunning, setDemoRunning] = useState(false);
+  const [demoMsg, setDemoMsg] = useState<string | null>(null);
+  const [demoRounds, setDemoRounds] = useState(1);
+  const [demoProgress, setDemoProgress] = useState(0);
+  const [demoTotal, setDemoTotal] = useState(0);
+  const startWorkflowsRef = useRef(0);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
     api
       .getAnalyticsSummary()
@@ -82,6 +94,149 @@ export default function SettingsPage() {
       })
       .catch(() => setCollectorStatus("offline"));
   }, []);
+
+  // Poll for demo progress
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
+
+  // Resume polling if actions are already running (e.g. navigated away and back)
+  useEffect(() => {
+    let cancelled = false;
+    api.getActionStatus().then((status) => {
+      if (cancelled) return;
+      if (status.analysis_running) {
+        setAnalysisRunning(true);
+        setAnalysisMsg("Running...");
+      }
+      if (status.demo_running) {
+        setDemoRunning(true);
+        setDemoMsg("In progress...");
+        // Start polling to track progress
+        api.getAnalyticsSummary().then((s) => {
+          if (cancelled) return;
+          setSummary(s);
+          startWorkflowsRef.current = 0;
+          pollRef.current = setInterval(async () => {
+            try {
+              const st = await api.getActionStatus();
+              const fresh = await api.getAnalyticsSummary();
+              setSummary(fresh);
+              if (!st.demo_running) {
+                stopPolling();
+                setDemoRunning(false);
+                setDemoMsg(`Done — ${fresh.total_workflows} workflows`);
+                if (st.analysis_running) {
+                  setAnalysisRunning(true);
+                  setAnalysisMsg("Running...");
+                }
+              }
+              if (!st.analysis_running && analysisRunning) {
+                setAnalysisRunning(false);
+                setAnalysisMsg("Complete");
+              }
+            } catch {
+              stopPolling();
+              setDemoRunning(false);
+            }
+          }, 2000);
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleRunAnalysis = async () => {
+    setAnalysisRunning(true);
+    setAnalysisMsg(null);
+    try {
+      const res = await api.runAnalysis();
+      if (res.status === "already_running") {
+        setAnalysisMsg("Already running");
+        setAnalysisRunning(false);
+        return;
+      }
+      setAnalysisMsg("Running...");
+      // Poll status until done
+      const poll = setInterval(async () => {
+        try {
+          const status = await api.getActionStatus();
+          if (!status.analysis_running) {
+            clearInterval(poll);
+            setAnalysisRunning(false);
+            setAnalysisMsg("Complete");
+            // Refresh summary
+            api.getAnalyticsSummary().then(setSummary).catch(() => {});
+          }
+        } catch {
+          clearInterval(poll);
+          setAnalysisRunning(false);
+          setAnalysisMsg("Error checking status");
+        }
+      }, 3000);
+    } catch (err: unknown) {
+      setAnalysisRunning(false);
+      setAnalysisMsg(err instanceof Error ? err.message : "Failed");
+    }
+  };
+
+  const handleRunDemo = async () => {
+    setDemoRunning(true);
+    setDemoMsg(null);
+    setDemoProgress(0);
+    startWorkflowsRef.current = summary?.total_workflows ?? 0;
+    try {
+      const res = await api.runDemo(demoRounds);
+      if (res.status === "already_running") {
+        setDemoMsg("Already running");
+        setDemoRunning(false);
+        return;
+      }
+      const total = res.total_scenarios || 5;
+      setDemoTotal(total);
+      setDemoMsg(`0 / ${total} scenarios`);
+
+      // Poll workflow count to track progress
+      stopPolling();
+      pollRef.current = setInterval(async () => {
+        try {
+          const status = await api.getActionStatus();
+          const s = await api.getAnalyticsSummary();
+          setSummary(s);
+          const completed = Math.min(
+            s.total_workflows - startWorkflowsRef.current,
+            total
+          );
+          setDemoProgress(completed);
+          setDemoMsg(`${completed} / ${total} scenarios`);
+
+          if (!status.demo_running) {
+            stopPolling();
+            setDemoRunning(false);
+            const final = s.total_workflows - startWorkflowsRef.current;
+            setDemoMsg(`Done — ${final} scenarios completed. Running analysis...`);
+            setDemoProgress(total);
+            handleRunAnalysis();
+          }
+        } catch {
+          stopPolling();
+          setDemoRunning(false);
+          setDemoMsg("Error checking status");
+        }
+      }, 2000);
+    } catch (err: unknown) {
+      setDemoRunning(false);
+      setDemoMsg(err instanceof Error ? err.message : "Failed");
+    }
+  };
 
   return (
     <div className="p-6">
@@ -176,6 +331,99 @@ export default function SettingsPage() {
                   </p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Actions */}
+          <Card className="border-border bg-card">
+            <CardContent className="p-4">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Actions{" "}
+                <InfoTooltip text="Run the analysis pipeline to discover optimal paths from recorded workflows, or run a demo round to generate 5 new scenario executions." />
+              </p>
+
+              <div className="flex items-center gap-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={analysisRunning || collectorStatus !== "online"}
+                  onClick={handleRunAnalysis}
+                >
+                  {analysisRunning ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <FlaskConical className="h-3 w-3" />
+                  )}
+                  {analysisRunning ? "Running..." : "Run Analysis"}
+                </Button>
+
+                <div className="flex items-center rounded-md border border-border">
+                  <div className="flex items-center gap-1.5 border-r border-border px-2.5 py-1.5">
+                    <span className="text-xs text-muted-foreground">Rounds</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={demoRounds}
+                      onChange={(e) =>
+                        setDemoRounds(Math.max(1, Math.min(10, Number(e.target.value) || 1)))
+                      }
+                      disabled={demoRunning}
+                      className="h-5 w-8 bg-transparent text-center text-sm font-mono tabular-nums text-foreground outline-none disabled:opacity-50"
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={demoRunning || collectorStatus !== "online"}
+                    onClick={handleRunDemo}
+                    className="rounded-l-none border-0"
+                  >
+                    {demoRunning ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Play className="h-3 w-3" />
+                    )}
+                    {demoRunning
+                      ? "Running..."
+                      : `Run Demo (${demoRounds * 5})`}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Analysis feedback */}
+              {analysisMsg && !demoRunning && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {analysisMsg === "Complete" ? (
+                    <span className="text-emerald-400">{analysisMsg}</span>
+                  ) : analysisMsg.startsWith("Error") || analysisMsg.startsWith("Failed") ? (
+                    <span className="text-red-400">{analysisMsg}</span>
+                  ) : (
+                    analysisMsg
+                  )}
+                </p>
+              )}
+
+              {/* Demo progress */}
+              {(demoRunning || (demoMsg && demoProgress > 0)) && (
+                <div className="mt-3 space-y-1.5">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                      style={{
+                        width: `${demoTotal > 0 ? (demoProgress / demoTotal) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs tabular-nums text-muted-foreground">
+                    {demoMsg && demoMsg.startsWith("Done") ? (
+                      <span className="text-emerald-400">{demoMsg}</span>
+                    ) : (
+                      demoMsg
+                    )}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

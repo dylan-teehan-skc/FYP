@@ -84,10 +84,9 @@ SCENARIOS: list[Scenario] = [
         customer_id="C-101",
         workflow_type="refund_request",
         task_description=(
-            "Handle support ticket T-1001: Customer Alice Chen requests a refund "
-            "for order ORD-5001 (Wireless Earbuds Pro, $79.99). Check ticket status, "
-            "look up the order, check refund eligibility, process refund if eligible, "
-            "notify the customer, and close the ticket."
+            "Support ticket T-1001: Customer Alice Chen wants a refund for "
+            "order ORD-5001 (Wireless Earbuds Pro, $79.99). "
+            "Please resolve this ticket."
         ),
         expected_steps=6,
     ),
@@ -97,10 +96,9 @@ SCENARIOS: list[Scenario] = [
         customer_id="C-102",
         workflow_type="order_inquiry",
         task_description=(
-            "Handle support ticket T-1002: Customer Bob Martinez inquires about "
-            "order ORD-5002 status (USB-C Hub Dock, $249.99). Check ticket status, "
-            "look up the order, inform the customer of the current status, and "
-            "close the ticket."
+            "Support ticket T-1002: Customer Bob Martinez is asking about "
+            "the status of order ORD-5002 (USB-C Hub Dock, $249.99). "
+            "Please resolve this ticket."
         ),
         expected_steps=4,
     ),
@@ -110,10 +108,9 @@ SCENARIOS: list[Scenario] = [
         customer_id="C-103",
         workflow_type="refund_request",
         task_description=(
-            "Handle support ticket T-1003: Customer Carol Johnson requests a refund "
-            "for order ORD-5003 (Bluetooth Speaker, $159.00). Check ticket status, "
-            "look up the order, check refund eligibility, if denied search for "
-            "the refund policy to explain, notify the customer, and close the ticket."
+            "Support ticket T-1003: Customer Carol Johnson is requesting "
+            "a refund for order ORD-5003 (Bluetooth Speaker, $159.00). "
+            "Please resolve this ticket."
         ),
         expected_steps=6,
     ),
@@ -123,11 +120,9 @@ SCENARIOS: list[Scenario] = [
         customer_id="C-104",
         workflow_type="complaint",
         task_description=(
-            "Handle support ticket T-1004: VIP customer David Kim complains about "
-            "order ORD-5004 (Noise-Cancelling Headphones, $349.99). Check ticket "
-            "status, look up customer history to see VIP tier, look up the order, "
-            "search the knowledge base for VIP handling policy, send a resolution "
-            "message, and close the ticket."
+            "Support ticket T-1004: Customer David Kim is unhappy with "
+            "order ORD-5004 (Noise-Cancelling Headphones, $349.99) and "
+            "has filed a complaint. Please resolve this ticket."
         ),
         expected_steps=6,
     ),
@@ -137,10 +132,9 @@ SCENARIOS: list[Scenario] = [
         customer_id="C-105",
         workflow_type="product_support",
         task_description=(
-            "Handle support ticket T-1005: Customer Emma Wilson needs help pairing "
-            "her Wireless Headphones from order ORD-5005 ($99.99). Check ticket "
-            "status, search the knowledge base for pairing instructions, send the "
-            "instructions to the customer, and close the ticket."
+            "Support ticket T-1005: Customer Emma Wilson needs help "
+            "pairing her Wireless Headphones from order ORD-5005 "
+            "($99.99). Please resolve this ticket."
         ),
         expected_steps=4,
     ),
@@ -360,6 +354,7 @@ async def run_scenario(
             agent_name="SupportAgent",
             agent_role="customer_support",
         ) as trace:
+            trace.emit_mode(mode)
             tracing_mcp.set_trace(trace)
             try:
                 result = await agent.execute(scenario.task_description, context=context)

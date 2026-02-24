@@ -8,12 +8,18 @@ import { SavingsChart } from "@/components/compare/savings-chart";
 import { api } from "@/lib/api";
 import { formatDuration, formatPercent, formatNumber, formatCost } from "@/lib/format";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
-import type { ComparisonResponse, TimelineResponse, SavingsResponse } from "@/lib/types";
+import type { ComparisonResponse, TimelineResponse } from "@/lib/types";
 
-function SectionLabel({ children }: { children: ReactNode }) {
+function SectionLabel({ children, tooltip }: { children: ReactNode; tooltip?: string }) {
   return (
     <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
       {children}
+      {tooltip && (
+        <>
+          {" "}
+          <InfoTooltip text={tooltip} />
+        </>
+      )}
     </p>
   );
 }
@@ -70,19 +76,13 @@ function SkeletonCard() {
 export default function ComparePage() {
   const [comparison, setComparison] = useState<ComparisonResponse | null>(null);
   const [timeline, setTimeline] = useState<TimelineResponse | null>(null);
-  const [savings, setSavings] = useState<SavingsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      api.getComparison(),
-      api.getTimeline(),
-      api.getSavings().catch(() => null),
-    ])
-      .then(([comp, tl, sav]) => {
+    Promise.all([api.getComparison(), api.getTimeline()])
+      .then(([comp, tl]) => {
         setComparison(comp);
         setTimeline(tl);
-        setSavings(sav);
       })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : "Failed to load data");
@@ -116,11 +116,18 @@ export default function ComparePage() {
   const guidedSucc = guided?.success_rate != null
     ? parseFloat((guided.success_rate * 100).toFixed(1)) : 0;
 
+  // Cost in cents for DeltaCard
+  const expCost = exp?.avg_cost_usd != null
+    ? parseFloat((exp.avg_cost_usd * 100).toFixed(2)) : 0;
+  const guidedCost = guided?.avg_cost_usd != null
+    ? parseFloat((guided.avg_cost_usd * 100).toFixed(2)) : 0;
+
   const explorationStats = exp
     ? [
         { label: "Avg Duration", value: formatDuration(exp.avg_duration_ms) },
         { label: "Avg Steps", value: formatNumber(exp.avg_steps) },
         { label: "Success Rate", value: formatPercent(exp.success_rate) },
+        { label: "Avg Cost", value: formatCost(exp.avg_cost_usd ?? null) },
         { label: "Workflows", value: formatNumber(exp.count) },
       ]
     : [];
@@ -133,6 +140,7 @@ export default function ComparePage() {
         },
         { label: "Avg Steps", value: formatNumber(guided.avg_steps) },
         { label: "Success Rate", value: formatPercent(guided.success_rate) },
+        { label: "Avg Cost", value: formatCost(guided.avg_cost_usd ?? null) },
         { label: "Workflows", value: formatNumber(guided.count) },
       ]
     : [];
@@ -194,45 +202,20 @@ export default function ComparePage() {
               unit="%"
               lowerIsBetter={false}
             />
-            <Card className="border-border bg-card">
-              <CardContent className="p-5">
-                <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Cost Saved
-                </p>
-                <span className="font-mono text-2xl font-semibold tabular-nums text-emerald-400">
-                  {savings ? formatCost(savings.cost_saved_usd) : "-"}
-                </span>
-                {savings && savings.pct_duration_improvement > 0 && (
-                  <div className="mt-3">
-                    <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/15 px-2.5 py-0.5 font-mono text-sm font-semibold tabular-nums text-emerald-400">
-                      ↓{savings.pct_duration_improvement.toFixed(0)}% faster
-                    </span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            <Card className="border-border bg-card">
-              <CardContent className="p-5">
-                <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  API Calls Reduced
-                </p>
-                <span className="font-mono text-2xl font-semibold tabular-nums text-emerald-400">
-                  {expSteps > guidedSteps
-                    ? `−${(expSteps - guidedSteps).toFixed(1)}`
-                    : formatNumber(expSteps - guidedSteps)}
-                </span>
-                <span className="ml-1.5 text-sm text-muted-foreground">
-                  per workflow
-                </span>
-                {savings && savings.pct_steps_improvement > 0 && (
-                  <div className="mt-3">
-                    <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/15 px-2.5 py-0.5 font-mono text-sm font-semibold tabular-nums text-emerald-400">
-                      ↓{savings.pct_steps_improvement.toFixed(0)}% fewer calls
-                    </span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <DeltaCard
+              label="Avg Cost"
+              before={expCost}
+              after={guidedCost}
+              unit="¢"
+              lowerIsBetter={true}
+            />
+            <DeltaCard
+              label="API Calls"
+              before={expSteps}
+              after={guidedSteps}
+              unit="calls"
+              lowerIsBetter={true}
+            />
           </>
         )}
       </div>
@@ -265,7 +248,7 @@ export default function ComparePage() {
       {/* Savings over time */}
       <Card className="border-border bg-card">
         <CardContent className="p-5">
-          <SectionLabel>Guided adoption and success rate over time</SectionLabel>
+          <SectionLabel tooltip="Tracks how guided mode adoption and success rate change over time. Rising guided ratio with stable or improving success rate confirms the optimization system is effective.">Guided adoption and success rate over time</SectionLabel>
           {!timeline ? (
             <div className="h-64 animate-pulse rounded bg-muted" />
           ) : (

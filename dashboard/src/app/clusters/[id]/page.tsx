@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -10,6 +10,7 @@ import {
   Activity,
   Zap,
   TrendingUp,
+  ShieldCheck,
 } from "lucide-react";
 import {
   useReactTable,
@@ -32,7 +33,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { DeltaCard } from "@/components/compare/delta-card";
 import { ClusterPerformanceChart } from "@/components/clusters/cluster-performance-chart";
+import { ClusterExecutionGraph } from "@/components/clusters/cluster-execution-graph";
+import { OptimalPathGraph } from "@/components/clusters/optimal-path-graph";
+import { CostLeakList } from "@/components/insights/cost-leak-list";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import {
   formatDuration,
@@ -41,16 +47,22 @@ import {
   formatCost,
   formatTimestamp,
 } from "@/lib/format";
-import type { ClusterDetailResponse, ClusterWorkflow } from "@/lib/types";
+import type { ClusterDetailResponse, ClusterWorkflow, BottleneckTool } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // Small shared helpers
 // ---------------------------------------------------------------------------
 
-function SectionHeader({ title }: { title: string }) {
+function SectionHeader({ title, tooltip }: { title: string; tooltip?: string }) {
   return (
     <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
       {title}
+      {tooltip && (
+        <>
+          {" "}
+          <InfoTooltip text={tooltip} />
+        </>
+      )}
     </p>
   );
 }
@@ -160,17 +172,25 @@ export default function ClusterDetailPage() {
   const pathId = params.id;
 
   const [detail, setDetail] = useState<ClusterDetailResponse | null>(null);
+  const [bottleneckTools, setBottleneckTools] = useState<BottleneckTool[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sorting, setSorting] = useState<SortingState>([
     { id: "timestamp", desc: true },
   ]);
+  const [page, setPage] = useState(0);
+  const pageSize = 15;
 
   useEffect(() => {
     if (!pathId) return;
-    api
-      .getClusterDetail(pathId)
-      .then(setDetail)
+    Promise.all([
+      api.getClusterDetail(pathId),
+      api.getClusterBottlenecks(pathId).catch(() => ({ tools: [] })),
+    ])
+      .then(([det, bn]) => {
+        setDetail(det);
+        setBottleneckTools(bn.tools);
+      })
       .catch((err: unknown) => {
         setError(
           err instanceof Error ? err.message : "Failed to load cluster detail",
@@ -304,13 +324,24 @@ export default function ClusterDetailPage() {
     [],
   );
 
+  const allWorkflows = useMemo(() => detail?.workflows ?? [], [detail]);
+  const totalPages = Math.max(1, Math.ceil(allWorkflows.length / pageSize));
+  const paginatedWorkflows = useMemo(
+    () => allWorkflows.slice(page * pageSize, (page + 1) * pageSize),
+    [allWorkflows, page, pageSize]
+  );
+
+  const coreRowModel = useMemo(() => getCoreRowModel<ClusterWorkflow>(), []);
+  const sortedRowModel = useMemo(() => getSortedRowModel<ClusterWorkflow>(), []);
+
   const table = useReactTable({
-    data: detail?.workflows ?? [],
+    data: paginatedWorkflows,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    getCoreRowModel: coreRowModel,
+    getSortedRowModel: sortedRowModel,
+    autoResetAll: false,
   });
 
   // ---------------------------------------------------------------------------
@@ -320,23 +351,47 @@ export default function ClusterDetailPage() {
   const exp = detail?.mode_stats.exploration;
   const guided = detail?.mode_stats.guided;
 
-  const explorationStats = exp
-    ? [
-        { label: "Avg Duration", value: formatDuration(exp.avg_duration_ms) },
-        { label: "Avg Steps", value: formatNumber(exp.avg_steps) },
-        { label: "Success Rate", value: formatPercent(exp.success_rate) },
-        { label: "Workflows", value: formatNumber(exp.count) },
-      ]
-    : [];
+  const explorationStats =
+    exp && exp.count > 0
+      ? [
+          { label: "Avg Duration", value: formatDuration(exp.avg_duration_ms) },
+          { label: "Avg Steps", value: formatNumber(exp.avg_steps) },
+          { label: "Success Rate", value: formatPercent(exp.success_rate) },
+          { label: "Avg Cost", value: formatCost(exp.avg_cost_usd ?? null) },
+          { label: "Workflows", value: formatNumber(exp.count) },
+        ]
+      : [];
 
-  const guidedStats = guided
-    ? [
-        { label: "Avg Duration", value: formatDuration(guided.avg_duration_ms) },
-        { label: "Avg Steps", value: formatNumber(guided.avg_steps) },
-        { label: "Success Rate", value: formatPercent(guided.success_rate) },
-        { label: "Workflows", value: formatNumber(guided.count) },
-      ]
-    : [];
+  const guidedStats =
+    guided && guided.count > 0
+      ? [
+          { label: "Avg Duration", value: formatDuration(guided.avg_duration_ms) },
+          { label: "Avg Steps", value: formatNumber(guided.avg_steps) },
+          { label: "Success Rate", value: formatPercent(guided.success_rate) },
+          { label: "Avg Cost", value: formatCost(guided.avg_cost_usd ?? null) },
+          { label: "Workflows", value: formatNumber(guided.count) },
+        ]
+      : [];
+
+  const noModeData = explorationStats.length === 0 && guidedStats.length === 0;
+  const hasBothModes = explorationStats.length > 0 && guidedStats.length > 0;
+
+  const expDurS = exp?.avg_duration_ms != null
+    ? parseFloat((exp.avg_duration_ms / 1000).toFixed(1)) : 0;
+  const guidedDurS = guided?.avg_duration_ms != null
+    ? parseFloat((guided.avg_duration_ms / 1000).toFixed(1)) : 0;
+  const expSteps = exp?.avg_steps != null
+    ? parseFloat(exp.avg_steps.toFixed(1)) : 0;
+  const guidedSteps = guided?.avg_steps != null
+    ? parseFloat(guided.avg_steps.toFixed(1)) : 0;
+  const expSucc = exp?.success_rate != null
+    ? parseFloat((exp.success_rate * 100).toFixed(1)) : 0;
+  const guidedSucc = guided?.success_rate != null
+    ? parseFloat((guided.success_rate * 100).toFixed(1)) : 0;
+  const expCost = exp?.avg_cost_usd != null
+    ? parseFloat((exp.avg_cost_usd * 100).toFixed(2)) : 0;
+  const guidedCost = guided?.avg_cost_usd != null
+    ? parseFloat((guided.avg_cost_usd * 100).toFixed(2)) : 0;
 
   // ---------------------------------------------------------------------------
   // Render
@@ -382,57 +437,111 @@ export default function ClusterDetailPage() {
                   icon={Hash}
                   label="Workflows"
                   value={formatNumber(detail.workflows.length)}
+                  tooltip="Number of workflows in this cluster that share a similar task embedding."
                 />
                 <MetaChip
                   icon={Clock}
                   label="Avg Duration"
                   value={formatDuration(detail.avg_duration_ms)}
+                  tooltip="Mean duration across all workflows in this cluster."
                 />
                 <MetaChip
                   icon={Activity}
                   label="Avg Steps"
                   value={formatNumber(detail.avg_steps)}
+                  tooltip="Average number of tool calls per workflow in this cluster."
                 />
                 <MetaChip
                   icon={TrendingUp}
                   label="Success Rate"
                   value={formatPercent(detail.success_rate)}
+                  tooltip="Proportion of workflows in this cluster that completed successfully."
                 />
                 <MetaChip
                   icon={Zap}
                   label="Execution Count"
                   value={formatNumber(detail.execution_count)}
+                  tooltip="Total number of individual tool calls across all workflows in this cluster."
                 />
+                {detail.avg_conformance != null && (
+                  <MetaChip
+                    icon={ShieldCheck}
+                    label="Avg Conformance"
+                    value={`${(detail.avg_conformance * 100).toFixed(0)}%`}
+                    tooltip="Average conformance across all workflows in this cluster. Measures how closely each workflow's tool sequence matches the optimal path. 100% = every workflow followed the optimal path perfectly."
+                  />
+                )}
               </div>
             </CardContent>
           </Card>
 
-          {/* Optimal Tool Sequence */}
+          {/* Savings strip */}
+          {hasBothModes && (
+            <div className="grid grid-cols-3 gap-3 xl:grid-cols-5">
+              <DeltaCard
+                label="Success Rate"
+                before={expSucc}
+                after={guidedSucc}
+                unit="%"
+                lowerIsBetter={false}
+              />
+              <DeltaCard
+                label="Avg Duration"
+                before={expDurS}
+                after={guidedDurS}
+                unit="s"
+                lowerIsBetter={true}
+              />
+              <DeltaCard
+                label="Avg Steps"
+                before={expSteps}
+                after={guidedSteps}
+                unit="steps"
+                lowerIsBetter={true}
+              />
+              <DeltaCard
+                label="Avg Cost"
+                before={expCost}
+                after={guidedCost}
+                unit="¢"
+                lowerIsBetter={true}
+              />
+              <DeltaCard
+                label="API Calls"
+                before={expSteps}
+                after={guidedSteps}
+                unit="calls"
+                lowerIsBetter={true}
+              />
+            </div>
+          )}
+
+          {/* Execution Paths */}
           <Card className="border-border bg-card shadow-none">
             <CardContent className="px-4 pt-4 pb-4">
-              <SectionHeader title="Optimal Tool Sequence" />
+              <SectionHeader title="Execution Paths" tooltip="Optimal Path shows the learned best tool sequence. Execution Graph shows all observed tool transitions with edge thickness indicating frequency." />
               {detail.tool_sequence.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No tool sequence recorded yet.
                 </p>
               ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {detail.tool_sequence.map((tool, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400"
-                    >
-                      <span className="font-mono tabular-nums text-[10px] opacity-60">
-                        {i + 1}
-                      </span>
-                      <span>
-                        {tool
-                          .replace(/_/g, " ")
-                          .replace(/\b\w/g, (c) => c.toUpperCase())}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <Tabs defaultValue="optimal">
+                  <TabsList>
+                    <TabsTrigger value="optimal">Optimal Path</TabsTrigger>
+                    <TabsTrigger value="graph">Execution Graph</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="optimal">
+                    <OptimalPathGraph
+                      optimalSequence={detail.tool_sequence}
+                    />
+                  </TabsContent>
+                  <TabsContent value="graph">
+                    <ClusterExecutionGraph
+                      pathId={detail.path_id}
+                      optimalSequence={detail.tool_sequence}
+                    />
+                  </TabsContent>
+                </Tabs>
               )}
             </CardContent>
           </Card>
@@ -440,65 +549,88 @@ export default function ClusterDetailPage() {
           {/* Performance chart */}
           <Card className="border-border bg-card shadow-none">
             <CardContent className="px-4 pt-4 pb-2">
-              <SectionHeader title="Performance Over Time" />
+              <SectionHeader title="Performance Over Time" tooltip="Scatter plot of workflow duration over time. Blue dots are exploration runs, green dots are guided runs. Trend lines show rolling averages." />
               <ClusterPerformanceChart workflows={detail.workflows} />
             </CardContent>
           </Card>
 
           {/* Mode comparison */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* Exploration */}
-            <Card className="border-border bg-card">
-              <CardContent className="p-5">
-                <div className="mb-4 flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-blue-400" />
-                  <span className="text-sm font-semibold text-blue-400">
-                    Exploration
-                  </span>
-                </div>
-                <div>
-                  {explorationStats.length > 0 ? (
-                    explorationStats.map((s) => (
-                      <StatRow key={s.label} label={s.label} value={s.value} />
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No exploration runs yet.
-                    </p>
-                  )}
-                </div>
+          {noModeData ? (
+            <Card className="border-border bg-card shadow-none">
+              <CardContent className="px-4 py-6">
+                <p className="text-center text-sm text-muted-foreground">
+                  No mode-tagged workflows in this cluster yet.
+                </p>
               </CardContent>
             </Card>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {/* Exploration */}
+              <Card className="border-border bg-card">
+                <CardContent className="p-5">
+                  <div className="mb-4 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-blue-400" />
+                    <span className="text-sm font-semibold text-blue-400">
+                      Exploration
+                    </span>
+                  </div>
+                  <div>
+                    {explorationStats.length > 0 ? (
+                      explorationStats.map((s) => (
+                        <StatRow key={s.label} label={s.label} value={s.value} />
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No exploration runs yet.
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
 
-            {/* Guided */}
-            <Card className="border-border bg-card">
-              <CardContent className="p-5">
-                <div className="mb-4 flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-emerald-400" />
-                  <span className="text-sm font-semibold text-emerald-400">
-                    Guided
-                  </span>
-                </div>
-                <div>
-                  {guidedStats.length > 0 ? (
-                    guidedStats.map((s) => (
-                      <StatRow key={s.label} label={s.label} value={s.value} />
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No guided runs yet.
-                    </p>
-                  )}
-                </div>
+              {/* Guided */}
+              <Card className="border-border bg-card">
+                <CardContent className="p-5">
+                  <div className="mb-4 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-emerald-400" />
+                    <span className="text-sm font-semibold text-emerald-400">
+                      Guided
+                    </span>
+                  </div>
+                  <div>
+                    {guidedStats.length > 0 ? (
+                      guidedStats.map((s) => (
+                        <StatRow key={s.label} label={s.label} value={s.value} />
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No guided runs yet.
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Cost leaks */}
+          {bottleneckTools.length > 0 && (
+            <Card className="border-border bg-card shadow-none">
+              <CardContent className="px-4 pt-4 pb-4">
+                <SectionHeader
+                  title="Cost Leaks"
+                  tooltip="Tools in this cluster ranked by total cost. Amber-highlighted tools are called more than 2x per workflow on average, indicating potential redundancy."
+                />
+                <CostLeakList tools={bottleneckTools} />
               </CardContent>
             </Card>
-          </div>
+          )}
 
           {/* Workflow runs table */}
           <Card className="border-border bg-card shadow-none">
             <CardContent className="p-0">
               <div className="px-4 pt-4">
-                <SectionHeader title="Workflow Runs" />
+                <SectionHeader title="Workflow Runs" tooltip="All workflow executions in this cluster, sortable by any column. Click a row to view its full trace." />
               </div>
               <Table>
                 <TableHeader>
@@ -554,6 +686,36 @@ export default function ClusterDetailPage() {
                   )}
                 </TableBody>
               </Table>
+
+              {/* Pagination */}
+              {allWorkflows.length > pageSize && (
+                <div className="flex items-center justify-between border-t border-border px-4 py-3">
+                  <span className="text-xs text-muted-foreground">
+                    {allWorkflows.length} workflows
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                      disabled={page === 0}
+                      className="rounded px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      Page {page + 1} of {totalPages}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setPage((p) => Math.min(totalPages - 1, p + 1))
+                      }
+                      disabled={page >= totalPages - 1}
+                      className="rounded px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

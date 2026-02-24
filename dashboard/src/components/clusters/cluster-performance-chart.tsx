@@ -1,13 +1,16 @@
 "use client";
 
 import {
-  ScatterChart,
+  ComposedChart,
   Scatter,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
+  ReferenceLine,
+  ReferenceArea,
   ResponsiveContainer,
 } from "recharts";
 import type { ClusterWorkflow } from "@/lib/types";
@@ -28,17 +31,37 @@ interface ChartPoint {
   timestamp: string;
 }
 
+interface TrendPoint {
+  x: number;
+  y: number;
+}
+
 interface CustomTooltipProps {
   active?: boolean;
   payload?: Array<{ payload: ChartPoint }>;
 }
 
+function rollingAverage(
+  points: { x: number; y: number }[],
+  window = 3
+): TrendPoint[] {
+  return points.map((p, i) => {
+    const start = Math.max(0, i - window + 1);
+    const slice = points.slice(start, i + 1);
+    return {
+      x: p.x,
+      y: slice.reduce((s, v) => s + v.y, 0) / slice.length,
+    };
+  });
+}
+
 function CustomTooltip({ active, payload }: CustomTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
   const d = payload[0].payload;
+  if (!d.workflow_id) return null;
   const description = d.task_description ?? "(no description)";
   const truncated =
-    description.length > 60 ? description.slice(0, 60) + "…" : description;
+    description.length > 60 ? description.slice(0, 60) + "\u2026" : description;
   const statusColor =
     d.status === "success"
       ? "#34d399"
@@ -70,7 +93,10 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
         </div>
         <div className="flex gap-2">
           <span className="text-zinc-400">Status:</span>
-          <span className="font-medium tabular-nums" style={{ color: statusColor }}>
+          <span
+            className="font-medium tabular-nums"
+            style={{ color: statusColor }}
+          >
             {d.status}
           </span>
         </div>
@@ -84,14 +110,17 @@ export function ClusterPerformanceChart({
 }: ClusterPerformanceChartProps) {
   if (workflows.length === 0) {
     return (
-      <div className="flex h-[280px] items-center justify-center">
-        <p className="text-sm text-muted-foreground">No workflow data available</p>
+      <div className="flex h-[320px] items-center justify-center">
+        <p className="text-sm text-muted-foreground">
+          No workflow data available
+        </p>
       </div>
     );
   }
 
   const sortedWorkflows = [...workflows].sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    (a, b) =>
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
   const explorationData: ChartPoint[] = sortedWorkflows
@@ -110,6 +139,27 @@ export function ClusterPerformanceChart({
       ...w,
     }));
 
+  const explorationTrend = rollingAverage(explorationData, 3);
+  const guidedTrend = rollingAverage(guidedData, 3);
+
+  const allTimestamps = sortedWorkflows.map((w) =>
+    new Date(w.timestamp).getTime()
+  );
+  const xMin = Math.min(...allTimestamps);
+  const xMax = Math.max(...allTimestamps);
+
+  const transitionX =
+    guidedData.length > 0 ? guidedData[0].x : null;
+
+  const explorationMean =
+    explorationData.length > 0
+      ? explorationData.reduce((s, d) => s + d.y, 0) / explorationData.length
+      : null;
+  const guidedMean =
+    guidedData.length > 0
+      ? guidedData.reduce((s, d) => s + d.y, 0) / guidedData.length
+      : null;
+
   const xTickFormatter = (value: number) =>
     new Date(value).toLocaleDateString("en-GB", {
       day: "2-digit",
@@ -119,18 +169,37 @@ export function ClusterPerformanceChart({
   const yTickFormatter = (value: number) => `${value.toFixed(0)}s`;
 
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <ScatterChart margin={{ top: 8, right: 16, left: -8, bottom: 8 }}>
+    <ResponsiveContainer width="100%" height={320}>
+      <ComposedChart margin={{ top: 8, right: 16, left: -8, bottom: 8 }}>
         <CartesianGrid stroke="#27272a" strokeDasharray="3 3" />
+
+        {transitionX !== null && (
+          <ReferenceArea
+            x1={xMin}
+            x2={transitionX}
+            fill="#60a5fa"
+            fillOpacity={0.04}
+          />
+        )}
+        {transitionX !== null && (
+          <ReferenceArea
+            x1={transitionX}
+            x2={xMax}
+            fill="#34d399"
+            fillOpacity={0.04}
+          />
+        )}
+
         <XAxis
           type="number"
           dataKey="x"
-          domain={["auto", "auto"]}
+          domain={[xMin, xMax]}
           tickFormatter={xTickFormatter}
           tick={{ fill: "#71717a", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           tickMargin={8}
+          allowDuplicatedCategory={false}
         />
         <YAxis
           type="number"
@@ -141,28 +210,95 @@ export function ClusterPerformanceChart({
           tickLine={false}
           tickMargin={4}
         />
+
+        {explorationMean !== null && (
+          <ReferenceLine
+            y={explorationMean}
+            stroke="#60a5fa"
+            strokeDasharray="3 6"
+            strokeOpacity={0.5}
+            label={{
+              value: `Avg: ${explorationMean.toFixed(1)}s`,
+              position: "right",
+              fill: "#60a5fa",
+              fontSize: 10,
+            }}
+          />
+        )}
+        {guidedMean !== null && (
+          <ReferenceLine
+            y={guidedMean}
+            stroke="#34d399"
+            strokeDasharray="3 6"
+            strokeOpacity={0.5}
+            label={{
+              value: `Avg: ${guidedMean.toFixed(1)}s`,
+              position: "right",
+              fill: "#34d399",
+              fontSize: 10,
+            }}
+          />
+        )}
+        {transitionX !== null && (
+          <ReferenceLine
+            x={transitionX}
+            stroke="#71717a"
+            strokeDasharray="4 4"
+            strokeWidth={1.5}
+            label={{
+              value: "Guided mode",
+              position: "insideTopRight",
+              fill: "#a1a1aa",
+              fontSize: 10,
+            }}
+          />
+        )}
+
         <Tooltip content={<CustomTooltip />} />
         <Legend
           wrapperStyle={{ fontSize: 11, color: "#71717a", paddingTop: 8 }}
-          formatter={(value: string) =>
-            value === "exploration" ? "Exploration" : "Guided"
-          }
         />
+
         <Scatter
-          name="exploration"
+          name="Exploration"
           data={explorationData}
           fill="#60a5fa"
           fillOpacity={0.8}
           r={5}
         />
         <Scatter
-          name="guided"
+          name="Guided"
           data={guidedData}
           fill="#34d399"
           fillOpacity={0.8}
           r={5}
         />
-      </ScatterChart>
+
+        {explorationTrend.length >= 2 && (
+          <Line
+            data={explorationTrend}
+            dataKey="y"
+            stroke="#3b82f6"
+            strokeWidth={2}
+            dot={false}
+            name="Exploration trend"
+            legendType="none"
+            isAnimationActive={false}
+          />
+        )}
+        {guidedTrend.length >= 2 && (
+          <Line
+            data={guidedTrend}
+            dataKey="y"
+            stroke="#10b981"
+            strokeWidth={2}
+            dot={false}
+            name="Guided trend"
+            legendType="none"
+            isAnimationActive={false}
+          />
+        )}
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

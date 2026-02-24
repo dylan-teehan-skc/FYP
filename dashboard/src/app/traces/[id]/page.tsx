@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Clock, Hash, Activity, DollarSign } from "lucide-react";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TraceTimeline } from "@/components/traces/trace-timeline";
@@ -23,15 +24,18 @@ function MetaChip({
   icon: Icon,
   label,
   value,
+  tooltip,
 }: {
   icon: React.ElementType;
   label: string;
   value: string;
+  tooltip?: string;
 }) {
   return (
     <div className="flex items-center gap-1.5 text-sm">
       <Icon className="h-3.5 w-3.5 text-muted-foreground" />
       <span className="text-muted-foreground">{label}</span>
+      {tooltip && <InfoTooltip text={tooltip} />}
       <span className="font-mono tabular-nums text-foreground">{value}</span>
     </div>
   );
@@ -67,10 +71,16 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function SectionHeader({ title }: { title: string }) {
+function SectionHeader({ title, tooltip }: { title: string; tooltip?: string }) {
   return (
     <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
       {title}
+      {tooltip && (
+        <>
+          {" "}
+          <InfoTooltip text={tooltip} />
+        </>
+      )}
     </p>
   );
 }
@@ -188,21 +198,25 @@ export default function TraceDetailPage() {
                   icon={Hash}
                   label="Steps"
                   value={formatNumber(trace.total_events)}
+                  tooltip="Total number of tool calls made in this workflow execution."
                 />
                 <MetaChip
                   icon={Clock}
                   label="Duration"
                   value={formatDuration(totalDurationMs)}
+                  tooltip="Total wall-clock time of all tool calls summed."
                 />
                 <MetaChip
                   icon={Activity}
                   label="Tokens"
                   value={formatNumber(totalTokens)}
+                  tooltip="Total LLM tokens consumed (prompt + completion) across all reasoning steps."
                 />
                 <MetaChip
                   icon={DollarSign}
                   label="Cost"
                   value={formatCost(totalCost)}
+                  tooltip="Estimated cost of LLM API calls for this workflow."
                 />
                 {firstEvent && (
                   <div className="ml-auto text-xs text-muted-foreground">
@@ -219,7 +233,7 @@ export default function TraceDetailPage() {
           {/* Timeline */}
           <Card className="border-border bg-card shadow-none">
             <CardContent className="px-4 pt-4 pb-2">
-              <SectionHeader title="Timeline" />
+              <SectionHeader title="Timeline" tooltip="Gantt chart of every tool call in this workflow. Bar width shows duration, colour shows status. Hover for details." />
               <TraceTimeline events={trace.events} />
             </CardContent>
           </Card>
@@ -242,7 +256,7 @@ export default function TraceDetailPage() {
           {/* Step breakdown */}
           <Card className="border-border bg-card shadow-none">
             <CardContent className="px-4 pt-4 pb-2">
-              <SectionHeader title="Step Breakdown" />
+              <SectionHeader title="Step Breakdown" tooltip="Detailed table of each tool call in execution order — tool name, input/output, duration, cost, and status." />
               <StepTable events={trace.events} />
             </CardContent>
           </Card>

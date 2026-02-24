@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ReactFlow,
   Controls,
-  MiniMap,
   Background,
   BackgroundVariant,
   useNodesState,
@@ -14,29 +13,32 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { api } from "@/lib/api";
-import type { OptimalPathsResponse } from "@/lib/types";
-import { ToolNode, type ToolNodeData, type ToolNodeType } from "./tool-node";
-import { DetailPanel } from "./detail-panel";
+import { ToolNode, type ToolNodeData, type ToolNodeType } from "../graph/tool-node";
+import { DetailPanel } from "../graph/detail-panel";
 import {
   applyDagreLayout,
   weightToStrokeWidth,
   buildOptimalEdgeSet,
-} from "./layout-utils";
+} from "../graph/layout-utils";
 
-// ─── node type registry ───────────────────────────────────────────────────────
+interface ClusterExecutionGraphProps {
+  pathId: string;
+  optimalSequence: string[];
+}
 
 const nodeTypes = { tool: ToolNode };
-
-// ─── types ────────────────────────────────────────────────────────────────────
 
 interface GraphData {
   nodes: ToolNodeType[];
   edges: Edge[];
 }
 
-// ─── inner renderer (only mounts once data is ready) ──────────────────────────
-
-function DagRenderer({ initialData }: { initialData: GraphData }) {
+/**
+ * Inner component that only mounts once we have graph data.
+ * This avoids useNodesState / useEdgesState triggering re-renders
+ * while the outer shell is still fetching.
+ */
+function GraphRenderer({ initialData }: { initialData: GraphData }) {
   const [nodes, , onNodesChange] = useNodesState<ToolNodeType>(initialData.nodes);
   const [edges, , onEdgesChange] = useEdgesState<Edge>(initialData.edges);
   const [selectedNodeData, setSelectedNodeData] = useState<ToolNodeData | null>(null);
@@ -55,7 +57,7 @@ function DagRenderer({ initialData }: { initialData: GraphData }) {
   const proOptions = useMemo(() => ({ hideAttribution: true }), []);
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-[480px] w-full">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -65,9 +67,9 @@ function DagRenderer({ initialData }: { initialData: GraphData }) {
         onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.15 }}
+        fitViewOptions={{ padding: 0.2 }}
         proOptions={proOptions}
-        className="bg-zinc-900"
+        className="bg-zinc-900 rounded-md"
         defaultEdgeOptions={{ type: "default" }}
       >
         <Background
@@ -80,16 +82,6 @@ function DagRenderer({ initialData }: { initialData: GraphData }) {
           className="[&>button]:border-zinc-700 [&>button]:bg-zinc-800 [&>button]:text-zinc-300 [&>button:hover]:bg-zinc-700"
           showInteractive={false}
         />
-        <MiniMap
-          nodeColor={(node) => {
-            const data = node.data as ToolNodeData;
-            if (data.avg_duration_ms < 500) return "#10b981";
-            if (data.avg_duration_ms < 2000) return "#f59e0b";
-            return "#ef4444";
-          }}
-          maskColor="rgba(9,9,11,0.75)"
-          className="border border-zinc-700 bg-zinc-800"
-        />
       </ReactFlow>
 
       <DetailPanel
@@ -100,12 +92,15 @@ function DagRenderer({ initialData }: { initialData: GraphData }) {
   );
 }
 
-// ─── outer component (handles loading / data fetching) ────────────────────────
-
-export function ExecutionDag() {
+export function ClusterExecutionGraph({
+  pathId,
+  optimalSequence,
+}: ClusterExecutionGraphProps) {
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const optimalKey = JSON.stringify(optimalSequence);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,24 +110,11 @@ export function ExecutionDag() {
         setLoading(true);
         setError(null);
 
-        const [data, pathsData] = await Promise.all([
-          api.getExecutionGraph(),
-          api.getOptimalPaths().catch(
-            (): OptimalPathsResponse => ({ paths: [] })
-          ),
-        ]);
-
+        const data = await api.getClusterExecutionGraph(pathId);
         if (cancelled) return;
 
-        const optimalEdges = buildOptimalEdgeSet(
-          pathsData.paths.map((p) => p.tool_sequence)
-        );
-        const optimalNodeIds = new Set<string>();
-        for (const path of pathsData.paths) {
-          for (const tool of path.tool_sequence) {
-            optimalNodeIds.add(tool);
-          }
-        }
+        const optimalEdges = buildOptimalEdgeSet([optimalSequence]);
+        const optimalNodeIds = new Set<string>(optimalSequence);
 
         const maxWeight = Math.max(
           ...data.edges.map((e) => e.weight),
@@ -201,11 +183,12 @@ export function ExecutionDag() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathId, optimalKey]);
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex h-[480px] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-600 border-t-emerald-500" />
           <p className="text-xs text-zinc-500">Loading execution graph…</p>
@@ -216,7 +199,7 @@ export function ExecutionDag() {
 
   if (error) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex h-[480px] items-center justify-center">
         <div className="rounded-md border border-red-500/30 bg-red-500/10 px-4 py-3">
           <p className="text-sm text-red-400">{error}</p>
         </div>
@@ -226,13 +209,13 @@ export function ExecutionDag() {
 
   if (!graphData || graphData.nodes.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex h-48 items-center justify-center">
         <p className="text-sm text-zinc-500">
-          No execution data yet. Run some workflows to populate the graph.
+          No execution data available for this cluster.
         </p>
       </div>
     );
   }
 
-  return <DagRenderer initialData={graphData} />;
+  return <GraphRenderer initialData={graphData} />;
 }

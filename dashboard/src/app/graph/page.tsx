@@ -11,7 +11,7 @@ export default function GraphPage() {
           <div>
             <h1 className="text-lg font-semibold tracking-tight">
               Execution Graph{" "}
-              <InfoTooltip text="Directed acyclic graph of tool-to-tool transitions observed across all workflow executions. Each node is a tool, each edge is a transition between consecutive tool calls. Thicker edges = more frequent transitions." />
+              <InfoTooltip text="Shows how tools are chained together across all workflows. Each box is a tool the agent can call. Arrows show which tool was called after which — thicker arrows mean that transition happened more often. Green animated arrows highlight the optimal path discovered by the system. Node colour shows average latency. Click any node for details." />
             </h1>
             <p className="text-sm text-muted-foreground">
               Tool transition DAG — node color indicates latency, edge thickness

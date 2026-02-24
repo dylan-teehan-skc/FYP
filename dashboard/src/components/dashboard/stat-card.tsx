@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import type { LucideIcon } from "lucide-react";
 
 interface StatCardProps {
@@ -9,6 +10,7 @@ interface StatCardProps {
   icon: LucideIcon;
   subtitle?: string;
   accentColor?: string;
+  tooltip?: string;
 }
 
 export function StatCard({
@@ -17,6 +19,7 @@ export function StatCard({
   icon: Icon,
   subtitle,
   accentColor = "text-emerald-400",
+  tooltip,
 }: StatCardProps) {
   return (
     <Card className="relative overflow-hidden border-border bg-card">
@@ -25,6 +28,12 @@ export function StatCard({
           <div className="space-y-1">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               {label}
+              {tooltip && (
+                <>
+                  {" "}
+                  <InfoTooltip text={tooltip} />
+                </>
+              )}
             </p>
             <p
               className={`font-mono text-2xl font-semibold tabular-nums ${accentColor}`}

@@ -267,25 +267,7 @@ class Database:
         )
 
     async def get_mode_distribution(self) -> dict[str, int]:
-        """Count guided vs exploration optimize events."""
-        rows = await self.fetch(
-            """SELECT activity, COUNT(*) AS cnt
-            FROM event_logs
-            WHERE activity IN ('optimize:guided', 'optimize:exploration')
-            GROUP BY activity
-            """
-        )
-        counts: dict[str, int] = {"optimize:guided": 0, "optimize:exploration": 0}
-        for r in rows:
-            counts[r["activity"]] = r["cnt"]
-        return {
-            "guided": counts["optimize:guided"],
-            "exploration": counts["optimize:exploration"],
-            "total": counts["optimize:guided"] + counts["optimize:exploration"],
-        }
-
-    async def get_mode_comparison(self) -> dict[str, Any]:
-        """Aggregate duration, steps, and success rate split by mode."""
+        """Count guided vs exploration workflows (no mode event = exploration)."""
         row = await self.fetchrow(
             """WITH mode_map AS (
                 SELECT
@@ -296,18 +278,81 @@ class Database:
                 GROUP BY workflow_id
             )
             SELECT
-                AVG(el.duration_ms)  FILTER (WHERE mm.is_guided = 0) AS exp_avg_duration,
-                AVG(el.step_number)  FILTER (WHERE mm.is_guided = 0) AS exp_avg_steps,
-                AVG(CASE WHEN el.status = 'success' THEN 1.0 ELSE 0.0 END)
-                    FILTER (WHERE mm.is_guided = 0) AS exp_success_rate,
-                COUNT(*) FILTER (WHERE mm.is_guided = 0) AS exp_count,
-                AVG(el.duration_ms)  FILTER (WHERE mm.is_guided = 1) AS gui_avg_duration,
-                AVG(el.step_number)  FILTER (WHERE mm.is_guided = 1) AS gui_avg_steps,
-                AVG(CASE WHEN el.status = 'success' THEN 1.0 ELSE 0.0 END)
-                    FILTER (WHERE mm.is_guided = 1) AS gui_success_rate,
-                COUNT(*) FILTER (WHERE mm.is_guided = 1) AS gui_count
+                COUNT(*) FILTER (WHERE COALESCE(mm.is_guided, 0) = 0) AS exploration,
+                COUNT(*) FILTER (WHERE mm.is_guided = 1) AS guided
             FROM event_logs el
-            JOIN mode_map mm ON mm.workflow_id = el.workflow_id
+            LEFT JOIN mode_map mm ON mm.workflow_id = el.workflow_id
+            WHERE el.activity = 'workflow:complete'
+            """
+        )
+        if row is None:
+            return {"guided": 0, "exploration": 0, "total": 0}
+        guided = row["guided"] or 0
+        exploration = row["exploration"] or 0
+        return {
+            "guided": guided,
+            "exploration": exploration,
+            "total": guided + exploration,
+        }
+
+    async def get_mode_comparison(self) -> dict[str, Any]:
+        """Aggregate duration, steps, cost, and success rate split by mode."""
+        row = await self.fetchrow(
+            """WITH mode_map AS (
+                SELECT
+                    workflow_id,
+                    MAX(CASE WHEN activity = 'optimize:guided'
+                        THEN 1 ELSE 0 END) AS is_guided
+                FROM event_logs
+                WHERE activity IN (
+                    'optimize:guided', 'optimize:exploration')
+                GROUP BY workflow_id
+            ),
+            cost_map AS (
+                SELECT
+                    workflow_id,
+                    SUM(cost_usd) AS total_cost_usd
+                FROM event_logs
+                GROUP BY workflow_id
+            )
+            SELECT
+                AVG(el.duration_ms)
+                    FILTER (WHERE COALESCE(mm.is_guided, 0) = 0)
+                    AS exp_avg_duration,
+                AVG(el.step_number)
+                    FILTER (WHERE COALESCE(mm.is_guided, 0) = 0)
+                    AS exp_avg_steps,
+                AVG(CASE WHEN el.status = 'success'
+                    THEN 1.0 ELSE 0.0 END)
+                    FILTER (WHERE COALESCE(mm.is_guided, 0) = 0)
+                    AS exp_success_rate,
+                COUNT(*)
+                    FILTER (WHERE COALESCE(mm.is_guided, 0) = 0)
+                    AS exp_count,
+                AVG(cm.total_cost_usd)
+                    FILTER (WHERE COALESCE(mm.is_guided, 0) = 0)
+                    AS exp_avg_cost,
+                AVG(el.duration_ms)
+                    FILTER (WHERE mm.is_guided = 1)
+                    AS gui_avg_duration,
+                AVG(el.step_number)
+                    FILTER (WHERE mm.is_guided = 1)
+                    AS gui_avg_steps,
+                AVG(CASE WHEN el.status = 'success'
+                    THEN 1.0 ELSE 0.0 END)
+                    FILTER (WHERE mm.is_guided = 1)
+                    AS gui_success_rate,
+                COUNT(*)
+                    FILTER (WHERE mm.is_guided = 1)
+                    AS gui_count,
+                AVG(cm.total_cost_usd)
+                    FILTER (WHERE mm.is_guided = 1)
+                    AS gui_avg_cost
+            FROM event_logs el
+            LEFT JOIN mode_map mm
+                ON mm.workflow_id = el.workflow_id
+            LEFT JOIN cost_map cm
+                ON cm.workflow_id = el.workflow_id
             WHERE el.activity = 'workflow:complete'
             """
         )
@@ -316,7 +361,11 @@ class Database:
             return float(v) if v is not None else None
 
         if row is None:
-            empty = {"avg_duration_ms": None, "avg_steps": None, "success_rate": None, "count": 0}
+            empty = {
+                "avg_duration_ms": None, "avg_steps": None,
+                "success_rate": None, "count": 0,
+                "avg_cost_usd": None,
+            }
             return {"exploration": empty, "guided": empty}
 
         return {
@@ -325,12 +374,14 @@ class Database:
                 "avg_steps": _f(row["exp_avg_steps"]),
                 "success_rate": _f(row["exp_success_rate"]),
                 "count": row["exp_count"] or 0,
+                "avg_cost_usd": _f(row["exp_avg_cost"]),
             },
             "guided": {
                 "avg_duration_ms": _f(row["gui_avg_duration"]),
                 "avg_steps": _f(row["gui_avg_steps"]),
                 "success_rate": _f(row["gui_success_rate"]),
                 "count": row["gui_count"] or 0,
+                "avg_cost_usd": _f(row["gui_avg_cost"]),
             },
         }
 
@@ -409,6 +460,80 @@ class Database:
         ]
         return {"nodes": nodes, "edges": edges}
 
+    async def get_cluster_execution_graph(
+        self,
+        path_id: str,
+        similarity_threshold: float,
+    ) -> dict[str, Any]:
+        """Build tool-to-tool transition graph scoped to a single task cluster."""
+        matched_cte = """
+            WITH matched AS (
+                SELECT we.workflow_id
+                FROM workflow_embeddings we, optimal_paths op
+                WHERE op.path_id = $1
+                  AND we.embedding IS NOT NULL
+                  AND op.embedding IS NOT NULL
+                  AND 1 - (we.embedding <=> op.embedding) >= $2
+            )
+        """
+        tool_rows = await self.fetch(
+            matched_cte
+            + """
+            SELECT
+                tool_name,
+                COUNT(*) AS call_count,
+                AVG(duration_ms) AS avg_duration_ms
+            FROM event_logs
+            WHERE workflow_id IN (SELECT workflow_id FROM matched)
+              AND tool_name IS NOT NULL
+              AND activity LIKE 'tool_call:%%'
+            GROUP BY tool_name
+            """,
+            UUID(path_id),
+            similarity_threshold,
+        )
+        seq_rows = await self.fetch(
+            matched_cte
+            + """
+            SELECT workflow_id, tool_name, step_number
+            FROM event_logs
+            WHERE workflow_id IN (SELECT workflow_id FROM matched)
+              AND tool_name IS NOT NULL
+              AND activity LIKE 'tool_call:%%'
+            ORDER BY workflow_id, step_number
+            """,
+            UUID(path_id),
+            similarity_threshold,
+        )
+
+        from collections import defaultdict
+
+        edge_counts: dict[tuple[str, str], int] = defaultdict(int)
+        prev_wf: str | None = None
+        prev_tool: str | None = None
+        for r in seq_rows:
+            wf = str(r["workflow_id"])
+            tool = r["tool_name"]
+            if prev_wf == wf and prev_tool is not None:
+                edge_counts[(prev_tool, tool)] += 1
+            prev_wf = wf
+            prev_tool = tool
+
+        nodes = [
+            {
+                "id": r["tool_name"],
+                "label": r["tool_name"],
+                "avg_duration_ms": float(r["avg_duration_ms"]) if r["avg_duration_ms"] else None,
+                "call_count": r["call_count"],
+            }
+            for r in tool_rows
+        ]
+        edges = [
+            {"source": src, "target": tgt, "weight": w}
+            for (src, tgt), w in edge_counts.items()
+        ]
+        return {"nodes": nodes, "edges": edges}
+
     async def get_bottlenecks(self) -> list[asyncpg.Record]:
         """Per-tool aggregate stats for bottleneck detection."""
         return await self.fetch(
@@ -426,7 +551,41 @@ class Database:
             """
         )
 
-    async def list_task_clusters(self) -> list[asyncpg.Record]:
+    async def get_cluster_bottlenecks(
+        self,
+        path_id: str,
+        similarity_threshold: float,
+    ) -> list[asyncpg.Record]:
+        """Per-tool aggregate stats scoped to a single task cluster."""
+        return await self.fetch(
+            """WITH matched AS (
+                SELECT we.workflow_id
+                FROM workflow_embeddings we, optimal_paths op
+                WHERE op.path_id = $1
+                  AND we.embedding IS NOT NULL
+                  AND op.embedding IS NOT NULL
+                  AND 1 - (we.embedding <=> op.embedding) >= $2
+            )
+            SELECT
+                tool_name,
+                COUNT(*) AS call_count,
+                AVG(duration_ms) AS avg_duration_ms,
+                SUM(cost_usd) AS total_cost_usd,
+                COUNT(*)::float / NULLIF(COUNT(DISTINCT workflow_id), 0) AS avg_calls_per_workflow
+            FROM event_logs
+            WHERE workflow_id IN (SELECT workflow_id FROM matched)
+              AND tool_name IS NOT NULL
+              AND activity LIKE 'tool_call:%%'
+            GROUP BY tool_name
+            ORDER BY avg_duration_ms DESC NULLS LAST
+            """,
+            UUID(path_id),
+            similarity_threshold,
+        )
+
+    async def list_task_clusters(
+        self, similarity_threshold: float
+    ) -> list[asyncpg.Record]:
         """Fetch all task clusters with summary stats and matching workflow count."""
         return await self.fetch(
             """SELECT
@@ -443,17 +602,18 @@ class Database:
                     FROM workflow_embeddings we
                     WHERE op.embedding IS NOT NULL
                       AND we.embedding IS NOT NULL
-                      AND 1 - (we.embedding <=> op.embedding) >= 0.60
+                      AND 1 - (we.embedding <=> op.embedding) >= $1
                 ) AS workflow_count
             FROM optimal_paths op
             ORDER BY op.execution_count DESC
-            """
+            """,
+            similarity_threshold,
         )
 
     async def get_cluster_workflows(
         self,
         path_id: str,
-        similarity_threshold: float = 0.60,
+        similarity_threshold: float,
     ) -> dict[str, Any]:
         """Get optimal path and all matching workflows for a task cluster."""
         path_row = await self.fetchrow(
@@ -490,6 +650,17 @@ class Database:
                 FROM event_logs
                 WHERE activity IN ('optimize:guided', 'optimize:exploration')
                 GROUP BY workflow_id
+            ),
+            cost_map AS (
+                SELECT workflow_id, SUM(cost_usd) AS total_cost_usd
+                FROM event_logs
+                WHERE workflow_id IN (
+                    SELECT we.workflow_id
+                    FROM workflow_embeddings we
+                    WHERE we.embedding IS NOT NULL
+                      AND 1 - (we.embedding <=> $1::vector) >= $2
+                )
+                GROUP BY workflow_id
             )
             SELECT
                 mw.workflow_id::text,
@@ -500,16 +671,12 @@ class Database:
                 el.step_number AS steps,
                 el.timestamp,
                 COALESCE(mm.is_guided, 0) AS is_guided,
-                cost_agg.total_cost_usd
+                cm.total_cost_usd
             FROM matched_workflows mw
             JOIN event_logs el ON el.workflow_id = mw.workflow_id
                 AND el.activity = 'workflow:complete'
             LEFT JOIN mode_map mm ON mm.workflow_id = mw.workflow_id
-            LEFT JOIN LATERAL (
-                SELECT SUM(cost_usd) AS total_cost_usd
-                FROM event_logs
-                WHERE workflow_id = mw.workflow_id
-            ) cost_agg ON true
+            LEFT JOIN cost_map cm ON cm.workflow_id = mw.workflow_id
             ORDER BY el.timestamp DESC
             """,
             str(embedding),
@@ -530,6 +697,12 @@ class Database:
                 FROM event_logs
                 WHERE activity IN ('optimize:guided', 'optimize:exploration')
                 GROUP BY workflow_id
+            ),
+            cost_map AS (
+                SELECT workflow_id, SUM(cost_usd) AS total_cost_usd
+                FROM event_logs
+                WHERE workflow_id IN (SELECT workflow_id FROM matched_workflows)
+                GROUP BY workflow_id
             )
             SELECT
                 AVG(el.duration_ms)
@@ -539,24 +712,65 @@ class Database:
                 AVG(CASE WHEN el.status = 'success' THEN 1.0 ELSE 0.0 END)
                     FILTER (WHERE COALESCE(mm.is_guided, 0) = 0) AS exp_success_rate,
                 COUNT(*) FILTER (WHERE COALESCE(mm.is_guided, 0) = 0) AS exp_count,
+                AVG(cm.total_cost_usd)
+                    FILTER (WHERE COALESCE(mm.is_guided, 0) = 0) AS exp_avg_cost,
                 AVG(el.duration_ms) FILTER (WHERE mm.is_guided = 1) AS gui_avg_duration,
                 AVG(el.step_number) FILTER (WHERE mm.is_guided = 1) AS gui_avg_steps,
                 AVG(CASE WHEN el.status = 'success' THEN 1.0 ELSE 0.0 END)
                     FILTER (WHERE mm.is_guided = 1) AS gui_success_rate,
-                COUNT(*) FILTER (WHERE mm.is_guided = 1) AS gui_count
+                COUNT(*) FILTER (WHERE mm.is_guided = 1) AS gui_count,
+                AVG(cm.total_cost_usd)
+                    FILTER (WHERE mm.is_guided = 1) AS gui_avg_cost
             FROM matched_workflows mw
             JOIN event_logs el ON el.workflow_id = mw.workflow_id
                 AND el.activity = 'workflow:complete'
             LEFT JOIN mode_map mm ON mm.workflow_id = mw.workflow_id
+            LEFT JOIN cost_map cm ON cm.workflow_id = mw.workflow_id
             """,
             str(embedding),
             similarity_threshold,
+        )
+
+        tool_seq_rows = await self.fetch(
+            """WITH matched_workflows AS (
+                SELECT we.workflow_id
+                FROM workflow_embeddings we
+                WHERE we.embedding IS NOT NULL
+                  AND 1 - (we.embedding <=> $1::vector) >= $2
+            )
+            SELECT workflow_id, ARRAY_AGG(tool_name ORDER BY step_number) AS tools
+            FROM event_logs
+            WHERE workflow_id IN (SELECT workflow_id FROM matched_workflows)
+              AND tool_name IS NOT NULL
+              AND activity LIKE 'tool_call:%%'
+            GROUP BY workflow_id
+            """,
+            str(embedding),
+            similarity_threshold,
+        )
+        optimal_seq = list(path_row["tool_sequence"])
+        conformance_scores: list[float] = []
+        for row in tool_seq_rows:
+            actual = list(row["tools"])
+            max_len = max(len(actual), len(optimal_seq))
+            if max_len == 0:
+                continue
+            matches = sum(
+                1 for i in range(min(len(actual), len(optimal_seq)))
+                if actual[i] == optimal_seq[i]
+            )
+            conformance_scores.append(matches / max_len)
+        avg_conformance = (
+            sum(conformance_scores) / len(conformance_scores)
+            if conformance_scores
+            else None
         )
 
         return {
             "path": dict(path_row),
             "workflows": [dict(r) for r in workflow_rows],
             "mode_stats": dict(mode_stats_row) if mode_stats_row else None,
+            "avg_conformance": avg_conformance,
         }
 
     async def get_savings(self) -> dict[str, Any]:
@@ -573,7 +787,7 @@ class Database:
             cost_by_wf AS (
                 SELECT
                     el.workflow_id,
-                    mm.is_guided,
+                    COALESCE(mm.is_guided, 0) AS is_guided,
                     MAX(el.duration_ms)
                         FILTER (WHERE el.activity = 'workflow:complete') AS duration_ms,
                     MAX(el.step_number)
@@ -582,8 +796,8 @@ class Database:
                         FILTER (WHERE el.activity = 'workflow:complete') AS status,
                     SUM(el.cost_usd) AS total_cost_usd
                 FROM event_logs el
-                JOIN mode_map mm ON mm.workflow_id = el.workflow_id
-                GROUP BY el.workflow_id, mm.is_guided
+                LEFT JOIN mode_map mm ON mm.workflow_id = el.workflow_id
+                GROUP BY el.workflow_id, COALESCE(mm.is_guided, 0)
             )
             SELECT
                 AVG(duration_ms) FILTER (WHERE is_guided = 0) AS exp_avg_duration,
@@ -632,8 +846,8 @@ class Database:
             return round((baseline - improved) / baseline * 100, 2)
 
         return {
-            "time_saved_ms": max(time_saved, 0.0),
-            "cost_saved_usd": max(cost_saved, 0.0),
+            "time_saved_ms": time_saved,
+            "cost_saved_usd": cost_saved,
             "pct_duration_improvement": _pct(exp_dur, gui_dur),
             "pct_steps_improvement": _pct(exp_steps, gui_steps),
             "pct_success_improvement": _pct(1.0 - exp_succ, 1.0 - gui_succ),

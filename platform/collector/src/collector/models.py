@@ -181,6 +181,7 @@ class ModeStats(BaseModel):
     avg_steps: float | None
     success_rate: float | None
     count: int
+    avg_cost_usd: float | None = None
 
 
 class ComparisonOut(BaseModel):
@@ -313,3 +314,4 @@ class ClusterDetailOut(BaseModel):
     updated_at: datetime | None
     workflows: list[ClusterWorkflow]
     mode_stats: ClusterModeStats
+    avg_conformance: float | None = None

@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import type { ModeDistribution } from "@/lib/types";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 
 const COLORS = {
   guided: "#34d399",
@@ -40,7 +41,8 @@ export function ModeDonut() {
     <Card className="border-border bg-card">
       <CardContent className="p-4">
         <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Mode Distribution
+          Mode Distribution{" "}
+          <InfoTooltip text="Breakdown of workflows by execution mode. Exploration runs discover paths freely; Guided runs follow the historically optimal path. A higher guided ratio indicates the system is actively optimizing." />
         </p>
         <div className="flex items-center gap-4">
           <div className="relative h-32 w-32">

@@ -37,12 +37,14 @@ export default function OverviewPage() {
           icon={Activity}
           subtitle={`${summary ? formatNumber(summary.total_events) : "-"} events`}
           accentColor="text-foreground"
+          tooltip="Total number of end-to-end agent workflow executions captured by the SDK."
         />
         <StatCard
           label="Avg Duration"
           value={summary ? formatDuration(summary.avg_duration_ms) : "-"}
           icon={Clock}
           accentColor="text-foreground"
+          tooltip="Mean wall-clock time from workflow start to completion, across all runs."
         />
         <StatCard
           label="Success Rate"
@@ -53,11 +55,13 @@ export default function OverviewPage() {
               ? "text-emerald-400"
               : "text-amber-400"
           }
+          tooltip="Proportion of workflows that completed their task successfully. Green when above 85%."
         />
         <StatCard
           label="Avg Steps"
           value={summary ? formatNumber(summary.avg_steps) : "-"}
           icon={Layers}
+          tooltip="Average number of tool calls per workflow. Guided mode typically reduces this."
         />
       </div>
 

@@ -165,11 +165,53 @@ async def get_savings(request: Request) -> SavingsOut:
     return SavingsOut(**data)
 
 
+@router.get("/task-clusters/{path_id}/execution-graph")
+async def get_cluster_execution_graph(
+    path_id: str, request: Request
+) -> ExecutionGraphOut:
+    """Tool-to-tool transition graph scoped to a single task cluster."""
+    db = request.app.state.db
+    settings = request.app.state.settings
+    data = await db.get_cluster_execution_graph(path_id, settings.similarity_threshold)
+    log.info(
+        "cluster_execution_graph",
+        path_id=path_id,
+        nodes=len(data["nodes"]),
+        edges=len(data["edges"]),
+    )
+    return ExecutionGraphOut(**data)
+
+
+@router.get("/task-clusters/{path_id}/bottlenecks")
+async def get_cluster_bottlenecks(
+    path_id: str, request: Request
+) -> BottlenecksOut:
+    """Per-tool aggregate stats scoped to a single task cluster."""
+    db = request.app.state.db
+    settings = request.app.state.settings
+    rows = await db.get_cluster_bottlenecks(path_id, settings.similarity_threshold)
+    tools = [
+        {
+            "tool_name": row["tool_name"],
+            "call_count": row["call_count"],
+            "avg_duration_ms": _fopt(row.get("avg_duration_ms")),
+            "total_cost_usd": _fopt(row.get("total_cost_usd"), default=0.0) or 0.0,
+            "avg_calls_per_workflow": (
+                _fopt(row.get("avg_calls_per_workflow"), default=0.0) or 0.0
+            ),
+        }
+        for row in rows
+    ]
+    log.info("cluster_bottlenecks", path_id=path_id, count=len(tools))
+    return BottlenecksOut(tools=tools)
+
+
 @router.get("/task-clusters")
 async def list_task_clusters(request: Request) -> TaskClustersOut:
     """Return all discovered task clusters with summary stats."""
     db = request.app.state.db
-    rows = await db.list_task_clusters()
+    settings = request.app.state.settings
+    rows = await db.list_task_clusters(settings.similarity_threshold)
     clusters = [
         TaskClusterSummary(
             path_id=row["path_id"],
@@ -192,7 +234,8 @@ async def list_task_clusters(request: Request) -> TaskClustersOut:
 async def get_cluster_detail(path_id: str, request: Request) -> ClusterDetailOut:
     """Return the optimal path and all matching workflows for a cluster."""
     db = request.app.state.db
-    data = await db.get_cluster_workflows(path_id)
+    settings = request.app.state.settings
+    data = await db.get_cluster_workflows(path_id, settings.similarity_threshold)
 
     if data["path"] is None:
         raise HTTPException(status_code=404, detail="Task cluster not found")
@@ -220,12 +263,14 @@ async def get_cluster_detail(path_id: str, request: Request) -> ClusterDetailOut
             avg_steps=_fopt(ms.get("exp_avg_steps")),
             success_rate=_fopt(ms.get("exp_success_rate")),
             count=ms.get("exp_count") or 0,
+            avg_cost_usd=_fopt(ms.get("exp_avg_cost")),
         ),
         guided=ModeStats(
             avg_duration_ms=_fopt(ms.get("gui_avg_duration")),
             avg_steps=_fopt(ms.get("gui_avg_steps")),
             success_rate=_fopt(ms.get("gui_success_rate")),
             count=ms.get("gui_count") or 0,
+            avg_cost_usd=_fopt(ms.get("gui_avg_cost")),
         ),
     )
 
@@ -241,4 +286,5 @@ async def get_cluster_detail(path_id: str, request: Request) -> ClusterDetailOut
         updated_at=path.get("updated_at"),
         workflows=workflows,
         mode_stats=mode_stats,
+        avg_conformance=_fopt(data.get("avg_conformance")),
     )

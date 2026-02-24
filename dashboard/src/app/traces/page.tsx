@@ -204,13 +204,16 @@ export default function TracesPage() {
     [],
   );
 
+  const coreRowModel = useMemo(() => getCoreRowModel<WorkflowListItem>(), []);
+  const sortedRowModel = useMemo(() => getSortedRowModel<WorkflowListItem>(), []);
+
   const table = useReactTable({
     data: workflows,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    getCoreRowModel: coreRowModel,
+    getSortedRowModel: sortedRowModel,
   });
 
   return (

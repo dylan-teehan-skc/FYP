@@ -10,10 +10,16 @@ import type { BottlenecksResponse, BottleneckTool } from "@/lib/types";
 import { formatCost, formatDuration } from "@/lib/format";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 
-function SectionLabel({ children }: { children: ReactNode }) {
+function SectionLabel({ children, tooltip }: { children: ReactNode; tooltip?: string }) {
   return (
     <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
       {children}
+      {tooltip && (
+        <>
+          {" "}
+          <InfoTooltip text={tooltip} />
+        </>
+      )}
     </p>
   );
 }
@@ -22,15 +28,23 @@ function SummaryPill({
   label,
   value,
   accent,
+  tooltip,
 }: {
   label: string;
   value: string;
   accent?: string;
+  tooltip?: string;
 }) {
   return (
     <div className="flex flex-col gap-0.5 rounded-md border border-border bg-muted/30 px-3 py-2">
       <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
         {label}
+        {tooltip && (
+          <>
+            {" "}
+            <InfoTooltip text={tooltip} />
+          </>
+        )}
       </span>
       <span
         className={`font-mono text-base font-semibold tabular-nums ${accent ?? "text-foreground"}`}
@@ -97,16 +111,18 @@ export default function InsightsPage() {
         </div>
       ) : (
         <div className="mb-6 grid grid-cols-4 gap-3">
-          <SummaryPill label="Tools tracked" value={String(tools.length)} />
+          <SummaryPill label="Tools tracked" value={String(tools.length)} tooltip="Total number of distinct tools observed across all workflow executions." />
           <SummaryPill
             label="Total cost"
             value={formatCost(totalCost)}
             accent="text-foreground"
+            tooltip="Sum of estimated costs across all tool calls, based on per-call pricing."
           />
           <SummaryPill
             label="Redundant tools"
             value={String(redundantCount)}
             accent={redundantCount > 0 ? "text-amber-400" : "text-foreground"}
+            tooltip="Tools called more than 2 times per workflow on average, suggesting unnecessary retries or loops."
           />
           <SummaryPill
             label="Slowest tool"
@@ -116,6 +132,7 @@ export default function InsightsPage() {
                 : "-"
             }
             accent="text-red-400"
+            tooltip="The tool with the highest average execution time. A prime candidate for caching or optimization."
           />
         </div>
       )}
@@ -123,7 +140,7 @@ export default function InsightsPage() {
       {/* Scatter plot */}
       <Card className="mb-6 border-border bg-card">
         <CardContent className="p-5">
-          <SectionLabel>
+          <SectionLabel tooltip="Each dot is a tool. Position shows how often and how slowly it runs. Larger dots cost more. Tools in the top-right corner are both frequent and slow — the biggest optimization targets.">
             Bottleneck map — frequency vs latency (dot size = total cost)
           </SectionLabel>
           {!data ? (
@@ -137,7 +154,10 @@ export default function InsightsPage() {
       {/* Cost leak list */}
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Cost Leaks</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            Cost Leaks{" "}
+            <InfoTooltip text="Tools ranked by total estimated cost. Amber-highlighted tools are called more than 2x per workflow on average, indicating potential redundancy." />
+          </h2>
           <p className="text-xs text-muted-foreground">
             Ranked by total cost — amber highlights redundant callers
           </p>

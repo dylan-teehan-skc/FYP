@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import { formatDuration, formatTimestamp } from "@/lib/format";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import type { WorkflowListItem } from "@/lib/types";
 
 function ModeBadge({ mode }: { mode: string }) {
@@ -63,7 +64,8 @@ export function ActivityFeed() {
     <Card className="border-border bg-card">
       <CardContent className="p-4">
         <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Recent Activity
+          Recent Activity{" "}
+          <InfoTooltip text="Last 10 workflow executions in chronological order. Each row represents one agent run with its status, mode, duration, and step count." />
         </p>
         <div className="space-y-0">
           {workflows.length === 0 ? (

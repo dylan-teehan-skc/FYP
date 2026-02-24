@@ -82,6 +82,7 @@ export interface ModeStats {
   avg_steps: number;
   success_rate: number;
   count: number;
+  avg_cost_usd?: number | null;
 }
 
 export interface ComparisonResponse {
@@ -185,4 +186,19 @@ export interface ClusterDetailResponse {
   updated_at: string;
   workflows: ClusterWorkflow[];
   mode_stats: ClusterModeStats;
+  avg_conformance: number | null;
+}
+
+// === Action types ===
+
+export interface ActionResponse {
+  status: string;
+  message: string;
+  total_scenarios: number;
+}
+
+export interface ActionStatusResponse {
+  demo_running: boolean;
+  analysis_running: boolean;
+  message: string;
 }

@@ -194,13 +194,16 @@ export default function ClustersPage() {
     [],
   );
 
+  const coreRowModel = useMemo(() => getCoreRowModel<TaskClusterSummary>(), []);
+  const sortedRowModel = useMemo(() => getSortedRowModel<TaskClusterSummary>(), []);
+
   const table = useReactTable({
     data: clusters,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    getCoreRowModel: coreRowModel,
+    getSortedRowModel: sortedRowModel,
   });
 
   return (

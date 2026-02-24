@@ -2,6 +2,7 @@
 
 import type { EventOut, OptimalPath } from "@/lib/types";
 import { findBestMatch } from "@/lib/path-matching";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 
 interface ConformanceProps {
   events: EventOut[];
@@ -61,7 +62,8 @@ export function Conformance({ events, optimalPaths }: ConformanceProps) {
       <div className="mb-3 flex items-baseline justify-between">
         <div className="flex items-baseline gap-2">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Conformance
+            Conformance{" "}
+            <InfoTooltip text="How closely this workflow followed the best-known tool sequence for its task type. Steps are compared position-by-position against the optimal path. 100% = every step matched perfectly. Lower scores mean the agent deviated or took extra steps. Green = matched, amber = wrong tool at that position, grey = extra steps the optimal path didn't need." />
           </p>
           <span className="text-xs text-muted-foreground/60">
             vs. &ldquo;{bestPath.task_cluster}&rdquo;
