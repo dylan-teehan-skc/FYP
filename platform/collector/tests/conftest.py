@@ -71,6 +71,14 @@ class MockDatabase:
             return_value={"nodes": [], "edges": []}
         )
         self.get_cluster_bottlenecks = AsyncMock(return_value=[])
+        self.get_group_path_ids = AsyncMock(return_value=[])
+        self.get_group_workflows = AsyncMock(return_value={
+            "workflows": [], "mode_stats": None, "avg_conformance": None,
+        })
+        self.get_group_execution_graph = AsyncMock(
+            return_value={"nodes": [], "edges": []}
+        )
+        self.get_group_bottlenecks = AsyncMock(return_value=[])
 
     async def _insert_event(self, event: dict[str, Any]) -> None:
         self.events.append(event)
