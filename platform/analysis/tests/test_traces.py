@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
+
 from analysis.models import WorkflowTrace
 from analysis.traces import (
     compute_total_cost,
     compute_total_duration,
     compute_trace_success,
     extract_tool_sequence,
+    reconstruct_all_traces,
     traces_to_dataframe,
 )
-from tests.conftest import make_event
+from tests.conftest import MockAnalysisDatabase, make_event
 
 
 class TestExtractToolSequence:
@@ -96,3 +99,41 @@ class TestTracesToDataframe:
 
 
 import pytest  # noqa: E402 (used by pytest.approx above)
+
+
+class TestReconstructAllTraces:
+    async def test_returns_traces(self) -> None:
+        mock_db = MockAnalysisDatabase()
+        mock_db.fetch_all_workflow_ids = AsyncMock(return_value=["wf-1", "wf-2"])
+        mock_db.fetch_workflow_events = AsyncMock(return_value=[
+            {
+                "event_id": "evt-1",
+                "workflow_id": "wf-1",
+                "timestamp": "2025-02-23T10:00:01",
+                "activity": "tool_call:check_ticket",
+                "agent_name": "agent",
+                "agent_role": "triage",
+                "tool_name": "check_ticket",
+                "tool_parameters": {},
+                "tool_response": {},
+                "llm_model": "",
+                "llm_prompt_tokens": 0,
+                "llm_completion_tokens": 0,
+                "llm_reasoning": "",
+                "duration_ms": 200.0,
+                "cost_usd": 0.001,
+                "status": "success",
+                "error_message": None,
+                "step_number": 1,
+                "parent_event_id": None,
+            }
+        ])
+        traces = await reconstruct_all_traces(mock_db)
+        assert len(traces) == 2
+        assert all(isinstance(t, WorkflowTrace) for t in traces)
+
+    async def test_empty_database(self) -> None:
+        mock_db = MockAnalysisDatabase()
+        mock_db.fetch_all_workflow_ids = AsyncMock(return_value=[])
+        traces = await reconstruct_all_traces(mock_db)
+        assert traces == []

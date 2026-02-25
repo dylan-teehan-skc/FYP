@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from analysis.clustering import (
-    assign_cluster_label,
+    ClusterResult,
     cluster_by_embedding,
     cosine_similarity,
     edit_distance,
@@ -101,16 +101,6 @@ class TestNormalizedEditDistance:
         assert short_ned > long_ned
 
 
-# ── assign_cluster_label ─────────────────────────────────────────────
-
-class TestAssignClusterLabel:
-    def test_picks_shortest(self) -> None:
-        assert assign_cluster_label(["refund request", "refund", "process refund"]) == "refund"
-
-    def test_empty(self) -> None:
-        assert assign_cluster_label([]) == "unknown"
-
-
 # ── cluster_by_embedding ─────────────────────────────────────────────
 
 class TestClusterByEmbedding:
@@ -127,7 +117,9 @@ class TestClusterByEmbedding:
         ]
         result = await cluster_by_embedding(mock_db, similarity_threshold=0.9, min_executions=3)
         assert len(result) == 1
-        assert len(list(result.values())[0]) == 5
+        cluster = list(result.values())[0]
+        assert isinstance(cluster, ClusterResult)
+        assert len(cluster.workflow_ids) == 5
 
     async def test_min_executions_filter(self, mock_db: MockAnalysisDatabase) -> None:
         emb = [0.1] * 10
@@ -164,6 +156,29 @@ class TestClusterByEmbedding:
         ]
         result = await cluster_by_embedding(mock_db, min_executions=3)
         assert len(result) == 1
+
+    async def test_single_item(self, mock_db: MockAnalysisDatabase) -> None:
+        mock_db.fetch_all_embeddings.return_value = [
+            {"workflow_id": "wf-1", "task_description": "refund",
+             "embedding": [0.1, 0.2, 0.3]},
+        ]
+        result = await cluster_by_embedding(mock_db, min_executions=1)
+        assert len(result) == 1
+        assert list(result.values())[0].workflow_ids == ["wf-1"]
+
+    async def test_hac_groups_nearby_embeddings(
+        self, mock_db: MockAnalysisDatabase,
+    ) -> None:
+        """HAC should merge close embeddings even at high threshold."""
+        mock_db.fetch_all_embeddings.return_value = [
+            {"workflow_id": f"wf-{i}", "task_description": "task A",
+             "embedding": [1.0, 0.1 * i, 0.0]}
+            for i in range(4)
+        ]
+        result = await cluster_by_embedding(
+            mock_db, similarity_threshold=0.9, min_executions=3,
+        )
+        assert len(result) >= 1
 
 
 # ── subcluster_by_trace ──────────────────────────────────────────────

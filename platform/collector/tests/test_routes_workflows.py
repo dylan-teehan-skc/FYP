@@ -78,11 +78,15 @@ class TestGetTrace:
             "parent_event_id": None,
         }
         mock_db.get_workflow_trace = AsyncMock(return_value=[mock_row])
+        mock_db.get_task_description = AsyncMock(
+            return_value="Support ticket T-1001: refund request",
+        )
         response = await client.get("/workflows/660e8400-e29b-41d4-a716-446655440000/trace")
         assert response.status_code == 200
         data = response.json()
         assert data["total_events"] == 1
         assert data["events"][0]["activity"] == "tool_call:check_ticket"
+        assert data["task_description"] == "Support ticket T-1001: refund request"
 
     async def test_trace_not_found(self, client: AsyncClient, mock_db: MockDatabase) -> None:
         mock_db.get_workflow_trace = AsyncMock(return_value=[])

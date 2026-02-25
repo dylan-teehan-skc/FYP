@@ -1,17 +1,8 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  type ColumnDef,
-  type Column,
-  type SortingState,
-  flexRender,
-} from "@tanstack/react-table";
-import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ChevronDown, ChevronRight, Layers } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatDuration, formatPercent, formatTimestamp } from "@/lib/format";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
@@ -25,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { TaskClusterSummary } from "@/lib/types";
+import type { ClusterGroup, TaskClusterSummary } from "@/lib/types";
 
 function SuccessRateBadge({ rate }: { rate: number | null }) {
   if (rate === null || rate === undefined) {
@@ -44,63 +35,265 @@ function SuccessRateBadge({ rate }: { rate: number | null }) {
   );
 }
 
-function SortIcon({ isSorted }: { isSorted: false | "asc" | "desc" }) {
-  if (isSorted === "asc")
-    return <ArrowUp className="ml-1 inline h-3 w-3 text-foreground" />;
-  if (isSorted === "desc")
-    return <ArrowDown className="ml-1 inline h-3 w-3 text-foreground" />;
+function aggregateSuccessRate(subs: TaskClusterSummary[]): number | null {
+  const withRate = subs.filter((s) => s.success_rate !== null);
+  if (withRate.length === 0) return null;
+  const totalWf = withRate.reduce((a, s) => a + s.execution_count, 0);
+  if (totalWf === 0) return null;
   return (
-    <ArrowUpDown className="ml-1 inline h-3 w-3 text-muted-foreground opacity-40" />
+    withRate.reduce(
+      (a, s) => a + (s.success_rate ?? 0) * s.execution_count,
+      0,
+    ) / totalWf
   );
 }
 
-function SortableHeader({
+function aggregateAvgDuration(subs: TaskClusterSummary[]): number | null {
+  const withDur = subs.filter((s) => s.avg_duration_ms !== null);
+  if (withDur.length === 0) return null;
+  const totalWf = withDur.reduce((a, s) => a + s.execution_count, 0);
+  if (totalWf === 0) return null;
+  return (
+    withDur.reduce(
+      (a, s) => a + (s.avg_duration_ms ?? 0) * s.execution_count,
+      0,
+    ) / totalWf
+  );
+}
+
+function SubClusterLabel({
   label,
-  column,
+  taskDescription,
 }: {
   label: string;
-  column: Column<TaskClusterSummary, unknown>;
+  taskDescription: string | null;
 }) {
+  if (taskDescription) {
+    return <span className="text-sm text-foreground">{taskDescription}</span>;
+  }
+
+  const match = label.match(/\(subcluster_(\d+)\)$/);
+  const variantNum = match ? parseInt(match[1]) + 1 : null;
   return (
-    <button
-      onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-      className="flex items-center text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-    >
-      {label}
-      <SortIcon isSorted={column.getIsSorted()} />
-    </button>
+    <span className="text-sm text-foreground">
+      {variantNum ? `Variant ${variantNum}` : label}
+    </span>
   );
 }
 
-function SkeletonRows() {
+const PAGE_SIZE = 5;
+
+function GroupSection({ group }: { group: ClusterGroup }) {
+  const router = useRouter();
+  const isSingle = group.subclusters.length === 1;
+  const [expanded, setExpanded] = useState(true);
+  const [page, setPage] = useState(0);
+
+  const aggSuccess = aggregateSuccessRate(group.subclusters);
+  const aggDuration = aggregateAvgDuration(group.subclusters);
+
+  const totalPages = Math.ceil(group.subclusters.length / PAGE_SIZE);
+  const pagedSubs = group.subclusters.slice(
+    page * PAGE_SIZE,
+    (page + 1) * PAGE_SIZE,
+  );
+
+  const groupHref = `/clusters/group/${encodeURIComponent(group.name)}`;
+
+  if (isSingle) {
+    const sub = group.subclusters[0];
+    return (
+      <Card className="border-border bg-card shadow-none">
+        <div
+          onClick={() => router.push(`/clusters/${sub.path_id}`)}
+          className="flex cursor-pointer items-center gap-4 px-5 py-4 transition-colors hover:bg-accent/30"
+        >
+          <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-foreground">
+              {group.name}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-6 text-sm">
+            <span className="font-mono tabular-nums text-muted-foreground">
+              {group.total_workflows} workflows
+            </span>
+            <SuccessRateBadge rate={sub.success_rate} />
+            <span className="font-mono tabular-nums text-muted-foreground">
+              {formatDuration(sub.avg_duration_ms)}
+            </span>
+            <span className="font-mono tabular-nums text-muted-foreground">
+              {sub.tool_sequence.length} steps
+            </span>
+            <span className="tabular-nums text-xs text-muted-foreground">
+              {formatTimestamp(sub.updated_at)}
+            </span>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
   return (
-    <>
-      {Array.from({ length: 8 }).map((_, i) => (
-        <TableRow key={i} className="border-border hover:bg-transparent">
-          <TableCell colSpan={6}>
-            <div className="h-7 animate-pulse rounded bg-muted" />
-          </TableCell>
-        </TableRow>
+    <Card className="border-border bg-card shadow-none">
+      <div className="flex w-full items-center gap-4 px-5 py-4">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {expanded ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+        </button>
+        <div
+          onClick={() => router.push(groupHref)}
+          className="min-w-0 flex-1 cursor-pointer"
+        >
+          <p className="truncate text-sm font-medium text-foreground transition-colors hover:text-blue-400">
+            {group.name}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-6 text-sm">
+          <span className="font-mono tabular-nums text-muted-foreground">
+            {group.total_workflows} workflows
+          </span>
+          <SuccessRateBadge rate={aggSuccess} />
+          <span className="font-mono tabular-nums text-muted-foreground">
+            {formatDuration(aggDuration)}
+          </span>
+          <Badge variant="outline" className="border-zinc-600/30 text-zinc-400">
+            {group.subclusters.length} variants
+          </Badge>
+        </div>
+      </div>
+
+      {expanded && (
+        <CardContent className="border-t border-border p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-border hover:bg-transparent">
+                <TableHead className="px-5 py-2.5 text-xs font-medium text-muted-foreground">
+                  Variant
+                </TableHead>
+                <TableHead className="px-4 py-2.5 text-xs font-medium text-muted-foreground">
+                  Workflows
+                </TableHead>
+                <TableHead className="px-4 py-2.5 text-xs font-medium text-muted-foreground">
+                  Success Rate
+                </TableHead>
+                <TableHead className="px-4 py-2.5 text-xs font-medium text-muted-foreground">
+                  Avg Duration
+                </TableHead>
+                <TableHead className="px-4 py-2.5 text-xs font-medium text-muted-foreground">
+                  Optimal Steps
+                </TableHead>
+                <TableHead className="px-4 py-2.5 text-xs font-medium text-muted-foreground">
+                  Updated
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pagedSubs.map((sub) => (
+                <TableRow
+                  key={sub.path_id}
+                  onClick={() => router.push(`/clusters/${sub.path_id}`)}
+                  className="border-border cursor-pointer transition-colors hover:bg-accent/30"
+                >
+                  <TableCell className="px-5 py-3">
+                    <SubClusterLabel
+                      label={sub.task_cluster}
+                      taskDescription={sub.task_description}
+                    />
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <span className="font-mono tabular-nums text-sm text-muted-foreground">
+                      {sub.workflow_count}
+                    </span>
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <SuccessRateBadge rate={sub.success_rate} />
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <span className="font-mono tabular-nums text-sm text-muted-foreground">
+                      {formatDuration(sub.avg_duration_ms)}
+                    </span>
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <span className="font-mono tabular-nums text-sm text-muted-foreground">
+                      {sub.tool_sequence.length}
+                    </span>
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <span className="tabular-nums text-xs text-muted-foreground">
+                      {formatTimestamp(sub.updated_at)}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-border px-5 py-2.5">
+              <span className="text-xs text-muted-foreground">
+                {page * PAGE_SIZE + 1}&ndash;
+                {Math.min((page + 1) * PAGE_SIZE, group.subclusters.length)} of{" "}
+                {group.subclusters.length} variants
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPage((p) => Math.max(0, p - 1));
+                  }}
+                  disabled={page === 0}
+                  className="rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPage((p) => Math.min(totalPages - 1, p + 1));
+                  }}
+                  disabled={page >= totalPages - 1}
+                  className="rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
+function SkeletonGroups() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <Card key={i} className="border-border bg-card shadow-none">
+          <div className="px-5 py-4">
+            <div className="h-5 w-64 animate-pulse rounded bg-muted" />
+          </div>
+        </Card>
       ))}
-    </>
+    </div>
   );
 }
 
 export default function ClustersPage() {
-  const router = useRouter();
-  const [clusters, setClusters] = useState<TaskClusterSummary[]>([]);
+  const [groups, setGroups] = useState<ClusterGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: "workflow_count", desc: true },
-  ]);
 
   useEffect(() => {
     api
-      .getTaskClusters()
-      .then((res) => {
-        setClusters(res.clusters);
-      })
+      .getClusterGroups()
+      .then((res) => setGroups(res.groups))
       .catch((err: unknown) => {
         setError(
           err instanceof Error ? err.message : "Failed to load clusters",
@@ -109,102 +302,10 @@ export default function ClustersPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const columns = useMemo<ColumnDef<TaskClusterSummary>[]>(
-    () => [
-      {
-        id: "task_cluster",
-        accessorKey: "task_cluster",
-        header: ({ column }) => (
-          <SortableHeader label="Cluster" column={column} />
-        ),
-        cell: ({ row }) => (
-          <span
-            className="block max-w-xs truncate text-sm text-foreground"
-            title={row.original.task_cluster}
-          >
-            {row.original.task_cluster}
-          </span>
-        ),
-      },
-      {
-        id: "workflow_count",
-        accessorKey: "workflow_count",
-        header: ({ column }) => (
-          <SortableHeader label="Workflows" column={column} />
-        ),
-        cell: ({ row }) => (
-          <span className="font-mono tabular-nums text-sm text-muted-foreground">
-            {row.original.workflow_count}
-          </span>
-        ),
-        size: 100,
-      },
-      {
-        id: "success_rate",
-        accessorKey: "success_rate",
-        header: ({ column }) => (
-          <SortableHeader label="Success Rate" column={column} />
-        ),
-        cell: ({ row }) => (
-          <SuccessRateBadge rate={row.original.success_rate} />
-        ),
-        size: 120,
-      },
-      {
-        id: "avg_duration_ms",
-        accessorKey: "avg_duration_ms",
-        header: ({ column }) => (
-          <SortableHeader label="Avg Duration" column={column} />
-        ),
-        cell: ({ row }) => (
-          <span className="font-mono tabular-nums text-sm text-muted-foreground">
-            {formatDuration(row.original.avg_duration_ms)}
-          </span>
-        ),
-        size: 110,
-      },
-      {
-        id: "optimal_steps",
-        accessorFn: (row) => row.tool_sequence.length,
-        header: ({ column }) => (
-          <SortableHeader label="Optimal Steps" column={column} />
-        ),
-        cell: ({ row }) => (
-          <span className="font-mono tabular-nums text-sm text-muted-foreground">
-            {row.original.tool_sequence.length}
-          </span>
-        ),
-        size: 110,
-      },
-      {
-        id: "updated_at",
-        accessorKey: "updated_at",
-        header: ({ column }) => (
-          <SortableHeader label="Updated" column={column} />
-        ),
-        cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {formatTimestamp(row.original.updated_at)}
-          </span>
-        ),
-        size: 140,
-        sortingFn: "datetime",
-      },
-    ],
-    [],
+  const totalClusters = groups.reduce(
+    (a, g) => a + g.subclusters.length,
+    0,
   );
-
-  const coreRowModel = useMemo(() => getCoreRowModel<TaskClusterSummary>(), []);
-  const sortedRowModel = useMemo(() => getSortedRowModel<TaskClusterSummary>(), []);
-
-  const table = useReactTable({
-    data: clusters,
-    columns,
-    state: { sorting },
-    onSortingChange: setSorting,
-    getCoreRowModel: coreRowModel,
-    getSortedRowModel: sortedRowModel,
-  });
 
   return (
     <div className="p-6">
@@ -219,7 +320,7 @@ export default function ClustersPage() {
               ? "Loading..."
               : error
                 ? "Error"
-                : `${clusters.length} cluster${clusters.length !== 1 ? "s" : ""} discovered`}
+                : `${groups.length} cluster${groups.length !== 1 ? "s" : ""}, ${totalClusters} variant${totalClusters !== 1 ? "s" : ""} discovered`}
           </p>
         </div>
       </div>
@@ -230,66 +331,23 @@ export default function ClustersPage() {
         </div>
       )}
 
-      <Card className="border-border bg-card shadow-none">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow
-                  key={headerGroup.id}
-                  className="border-border hover:bg-transparent"
-                >
-                  {headerGroup.headers.map((header) => (
-                    <TableHead
-                      key={header.id}
-                      style={{ width: header.getSize() }}
-                      className="px-4 py-3"
-                    >
-                      {flexRender(
-                        header.column.columnDef.header,
-                        header.getContext(),
-                      )}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <SkeletonRows />
-              ) : table.getRowModel().rows.length === 0 ? (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell
-                    colSpan={columns.length}
-                    className="py-12 text-center text-sm text-muted-foreground"
-                  >
-                    No clusters discovered yet
-                  </TableCell>
-                </TableRow>
-              ) : (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    onClick={() =>
-                      router.push(`/clusters/${row.original.path_id}`)
-                    }
-                    className="border-border cursor-pointer transition-colors hover:bg-accent/30"
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="px-4 py-3">
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext(),
-                        )}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {loading ? (
+        <SkeletonGroups />
+      ) : groups.length === 0 ? (
+        <Card className="border-border bg-card shadow-none">
+          <CardContent className="py-12 text-center">
+            <p className="text-sm text-muted-foreground">
+              No clusters discovered yet
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {groups.map((group) => (
+            <GroupSection key={group.name} group={group} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

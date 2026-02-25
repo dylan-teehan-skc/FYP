@@ -269,3 +269,264 @@ class TestSavings:
         assert data["time_saved_ms"] == 24000.0
         assert data["pct_duration_improvement"] == 40.0
         assert data["pct_success_improvement"] == 75.0
+
+
+def _cluster_row(
+    path_id: str = "pid-1",
+    task_cluster: str = "Refund Processing",
+    **overrides,
+) -> dict:
+    """Helper to build a cluster summary row."""
+    ts = datetime.datetime(2025, 2, 23, tzinfo=datetime.UTC)
+    base = {
+        "path_id": path_id,
+        "task_cluster": task_cluster,
+        "tool_sequence": ["check_ticket", "process_refund"],
+        "avg_duration_ms": 1500.0,
+        "avg_steps": 3.0,
+        "success_rate": 0.95,
+        "execution_count": 10,
+        "workflow_count": 8,
+        "updated_at": ts,
+        "task_description": "Process customer refund",
+    }
+    base.update(overrides)
+    return base
+
+
+def _mode_stats_dict() -> dict:
+    return {
+        "exp_avg_duration": 3000.0,
+        "exp_avg_steps": 6.0,
+        "exp_success_rate": 0.80,
+        "exp_count": 5,
+        "exp_avg_cost": 0.01,
+        "gui_avg_duration": 1500.0,
+        "gui_avg_steps": 3.0,
+        "gui_success_rate": 0.96,
+        "gui_count": 3,
+        "gui_avg_cost": 0.005,
+    }
+
+
+def _workflow_row(workflow_id: str = "wf-1", **overrides) -> dict:
+    ts = datetime.datetime(2025, 2, 23, 10, 0, 0, tzinfo=datetime.UTC)
+    base = {
+        "workflow_id": workflow_id,
+        "task_description": "refund order",
+        "similarity": 0.92,
+        "status": "success",
+        "duration_ms": 1800.0,
+        "steps": 4,
+        "is_guided": True,
+        "timestamp": ts,
+        "total_cost_usd": 0.003,
+    }
+    base.update(overrides)
+    return base
+
+
+class TestListTaskClusters:
+    async def test_empty(self, client: AsyncClient) -> None:
+        response = await client.get("/task-clusters")
+        assert response.status_code == 200
+        assert response.json()["clusters"] == []
+
+    async def test_with_data(self, client: AsyncClient, mock_db: MockDatabase) -> None:
+        mock_db.list_task_clusters = AsyncMock(return_value=[_cluster_row()])
+        response = await client.get("/task-clusters")
+        assert response.status_code == 200
+        clusters = response.json()["clusters"]
+        assert len(clusters) == 1
+        assert clusters[0]["task_cluster"] == "Refund Processing"
+        assert clusters[0]["execution_count"] == 10
+
+
+class TestListTaskClustersGrouped:
+    async def test_empty(self, client: AsyncClient) -> None:
+        response = await client.get("/task-clusters/grouped")
+        assert response.status_code == 200
+        assert response.json()["groups"] == []
+
+    async def test_single_group_no_subclusters(
+        self, client: AsyncClient, mock_db: MockDatabase
+    ) -> None:
+        mock_db.list_task_clusters = AsyncMock(return_value=[
+            _cluster_row(path_id="pid-1", task_cluster="Refund Processing"),
+        ])
+        response = await client.get("/task-clusters/grouped")
+        assert response.status_code == 200
+        groups = response.json()["groups"]
+        assert len(groups) == 1
+        assert groups[0]["name"] == "Refund Processing"
+        assert groups[0]["total_workflows"] == 8
+
+    async def test_group_with_subclusters(
+        self, client: AsyncClient, mock_db: MockDatabase
+    ) -> None:
+        mock_db.list_task_clusters = AsyncMock(return_value=[
+            _cluster_row(
+                path_id="pid-1",
+                task_cluster="Refund Processing",
+                workflow_count=10,
+            ),
+            _cluster_row(
+                path_id="pid-2",
+                task_cluster="Refund Processing (subcluster_0)",
+                workflow_count=6,
+            ),
+            _cluster_row(
+                path_id="pid-3",
+                task_cluster="Refund Processing (subcluster_1)",
+                workflow_count=4,
+            ),
+        ])
+        response = await client.get("/task-clusters/grouped")
+        assert response.status_code == 200
+        groups = response.json()["groups"]
+        assert len(groups) == 1
+        assert groups[0]["name"] == "Refund Processing"
+        assert groups[0]["total_workflows"] == 10
+        assert len(groups[0]["subclusters"]) == 3
+
+
+class TestClusterGroupDetail:
+    async def test_not_found(self, client: AsyncClient) -> None:
+        response = await client.get("/task-clusters/group/NonExistent/detail")
+        assert response.status_code == 404
+
+    async def test_with_data(self, client: AsyncClient, mock_db: MockDatabase) -> None:
+        mock_db.get_group_path_ids = AsyncMock(return_value=["pid-1", "pid-2"])
+        mock_db.list_task_clusters = AsyncMock(return_value=[
+            _cluster_row(path_id="pid-1", task_cluster="Refund Processing"),
+            _cluster_row(
+                path_id="pid-2",
+                task_cluster="Refund Processing (subcluster_0)",
+                workflow_count=5,
+            ),
+        ])
+        mock_db.get_group_workflows = AsyncMock(return_value={
+            "workflows": [_workflow_row()],
+            "mode_stats": _mode_stats_dict(),
+            "avg_conformance": 0.85,
+        })
+        response = await client.get("/task-clusters/group/Refund%20Processing/detail")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Refund Processing"
+        assert len(data["workflows"]) == 1
+        assert data["avg_conformance"] == 0.85
+        assert data["mode_stats"]["guided"]["count"] == 3
+        assert data["optimal_sequence"] == ["check_ticket", "process_refund"]
+
+
+class TestClusterGroupExecutionGraph:
+    async def test_not_found(self, client: AsyncClient) -> None:
+        response = await client.get("/task-clusters/group/NonExistent/execution-graph")
+        assert response.status_code == 404
+
+    async def test_with_data(self, client: AsyncClient, mock_db: MockDatabase) -> None:
+        mock_db.get_group_path_ids = AsyncMock(return_value=["pid-1"])
+        mock_db.get_group_execution_graph = AsyncMock(return_value={
+            "nodes": [
+                {"id": "check_ticket", "label": "check_ticket",
+                 "avg_duration_ms": 200.0, "call_count": 5},
+            ],
+            "edges": [
+                {"source": "check_ticket", "target": "process_refund", "weight": 4},
+            ],
+        })
+        response = await client.get("/task-clusters/group/Refund/execution-graph")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["nodes"]) == 1
+        assert len(data["edges"]) == 1
+
+
+class TestClusterGroupBottlenecks:
+    async def test_not_found(self, client: AsyncClient) -> None:
+        response = await client.get("/task-clusters/group/NonExistent/bottlenecks")
+        assert response.status_code == 404
+
+    async def test_with_data(self, client: AsyncClient, mock_db: MockDatabase) -> None:
+        mock_db.get_group_path_ids = AsyncMock(return_value=["pid-1"])
+        mock_db.get_group_bottlenecks = AsyncMock(return_value=[
+            {
+                "tool_name": "check_ticket",
+                "call_count": 20,
+                "avg_duration_ms": 250.0,
+                "total_cost_usd": 0.02,
+                "avg_calls_per_workflow": 1.1,
+            }
+        ])
+        response = await client.get("/task-clusters/group/Refund/bottlenecks")
+        assert response.status_code == 200
+        tools = response.json()["tools"]
+        assert len(tools) == 1
+        assert tools[0]["tool_name"] == "check_ticket"
+
+
+class TestClusterExecutionGraph:
+    async def test_empty(self, client: AsyncClient) -> None:
+        response = await client.get("/task-clusters/pid-1/execution-graph")
+        assert response.status_code == 200
+        data = response.json()
+        assert data == {"nodes": [], "edges": []}
+
+    async def test_with_graph(self, client: AsyncClient, mock_db: MockDatabase) -> None:
+        mock_db.get_cluster_execution_graph = AsyncMock(return_value={
+            "nodes": [
+                {"id": "get_order", "label": "get_order",
+                 "avg_duration_ms": 140.0, "call_count": 6},
+            ],
+            "edges": [],
+        })
+        response = await client.get("/task-clusters/pid-1/execution-graph")
+        assert response.status_code == 200
+        assert len(response.json()["nodes"]) == 1
+
+
+class TestClusterBottlenecks:
+    async def test_empty(self, client: AsyncClient) -> None:
+        response = await client.get("/task-clusters/pid-1/bottlenecks")
+        assert response.status_code == 200
+        assert response.json()["tools"] == []
+
+    async def test_with_data(self, client: AsyncClient, mock_db: MockDatabase) -> None:
+        mock_db.get_cluster_bottlenecks = AsyncMock(return_value=[
+            {
+                "tool_name": "process_refund",
+                "call_count": 15,
+                "avg_duration_ms": 320.0,
+                "total_cost_usd": 0.03,
+                "avg_calls_per_workflow": 1.0,
+            }
+        ])
+        response = await client.get("/task-clusters/pid-1/bottlenecks")
+        assert response.status_code == 200
+        tools = response.json()["tools"]
+        assert len(tools) == 1
+        assert tools[0]["avg_duration_ms"] == 320.0
+
+
+class TestClusterDetail:
+    async def test_not_found(self, client: AsyncClient) -> None:
+        response = await client.get("/task-clusters/pid-999/workflows")
+        assert response.status_code == 404
+
+    async def test_with_data(self, client: AsyncClient, mock_db: MockDatabase) -> None:
+        path_row = _cluster_row()
+        mock_db.get_cluster_workflows = AsyncMock(return_value={
+            "path": path_row,
+            "workflows": [_workflow_row()],
+            "mode_stats": _mode_stats_dict(),
+            "avg_conformance": 0.90,
+        })
+        response = await client.get("/task-clusters/pid-1/workflows")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["task_cluster"] == "Refund Processing"
+        assert len(data["workflows"]) == 1
+        assert data["workflows"][0]["similarity"] == 0.92
+        assert data["mode_stats"]["exploration"]["count"] == 5
+        assert data["avg_conformance"] == 0.90

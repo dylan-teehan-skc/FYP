@@ -178,7 +178,7 @@ export default function TraceDetailPage() {
           <div className="flex items-start justify-between">
             <div>
               <h1 className="text-lg font-semibold tracking-tight">
-                Trace Detail
+                {trace.task_description || "Trace Detail"}
               </h1>
               <p className="mt-0.5 font-mono text-xs text-muted-foreground tabular-nums">
                 {workflowId}

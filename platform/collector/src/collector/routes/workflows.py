@@ -57,4 +57,10 @@ async def get_trace(workflow_id: str, request: Request) -> TraceOut:
     if not rows:
         raise HTTPException(status_code=404, detail=f"No events found for workflow {workflow_id}")
     events = [EventOut(**dict(row)) for row in rows]
-    return TraceOut(workflow_id=workflow_id, events=events, total_events=len(events))
+    task_description = await db.get_task_description(workflow_id)
+    return TraceOut(
+        workflow_id=workflow_id,
+        task_description=task_description,
+        events=events,
+        total_events=len(events),
+    )

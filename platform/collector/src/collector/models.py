@@ -103,6 +103,7 @@ class TraceOut(BaseModel):
     """Full workflow trace response."""
 
     workflow_id: str
+    task_description: str | None = None
     events: list[EventOut]
     total_events: int
 
@@ -272,12 +273,27 @@ class TaskClusterSummary(BaseModel):
     execution_count: int
     workflow_count: int
     updated_at: datetime | None
+    task_description: str | None = None
 
 
 class TaskClustersOut(BaseModel):
     """Response for GET /task-clusters."""
 
     clusters: list[TaskClusterSummary]
+
+
+class ClusterGroup(BaseModel):
+    """A Level-1 cluster group with nested sub-clusters."""
+
+    name: str
+    subclusters: list[TaskClusterSummary]
+    total_workflows: int
+
+
+class ClusterGroupsOut(BaseModel):
+    """Response for GET /task-clusters/grouped."""
+
+    groups: list[ClusterGroup]
 
 
 class ClusterWorkflow(BaseModel):
@@ -315,3 +331,18 @@ class ClusterDetailOut(BaseModel):
     workflows: list[ClusterWorkflow]
     mode_stats: ClusterModeStats
     avg_conformance: float | None = None
+
+
+class ClusterGroupDetailOut(BaseModel):
+    """Response for GET /task-clusters/group/{name}/detail."""
+
+    name: str
+    subclusters: list[TaskClusterSummary]
+    total_workflows: int
+    avg_duration_ms: float | None
+    avg_steps: float | None
+    success_rate: float | None
+    workflows: list[ClusterWorkflow]
+    mode_stats: ClusterModeStats
+    avg_conformance: float | None = None
+    optimal_sequence: list[str] = []

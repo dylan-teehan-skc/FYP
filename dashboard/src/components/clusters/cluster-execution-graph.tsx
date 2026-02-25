@@ -22,7 +22,9 @@ import {
 } from "../graph/layout-utils";
 
 interface ClusterExecutionGraphProps {
-  pathId: string;
+  /** Pass either `pathId` (variant view) or `groupName` (group view), not both. */
+  pathId?: string;
+  groupName?: string;
   optimalSequence: string[];
 }
 
@@ -94,6 +96,7 @@ function GraphRenderer({ initialData }: { initialData: GraphData }) {
 
 export function ClusterExecutionGraph({
   pathId,
+  groupName,
   optimalSequence,
 }: ClusterExecutionGraphProps) {
   const [graphData, setGraphData] = useState<GraphData | null>(null);
@@ -103,6 +106,12 @@ export function ClusterExecutionGraph({
   const optimalKey = JSON.stringify(optimalSequence);
 
   useEffect(() => {
+    if (!pathId && !groupName) {
+      setError("No pathId or groupName provided.");
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
     async function load() {
@@ -110,16 +119,16 @@ export function ClusterExecutionGraph({
         setLoading(true);
         setError(null);
 
-        const data = await api.getClusterExecutionGraph(pathId);
+        const data = groupName
+          ? await api.getClusterGroupExecutionGraph(groupName)
+          : await api.getClusterExecutionGraph(pathId!);
+
         if (cancelled) return;
 
         const optimalEdges = buildOptimalEdgeSet([optimalSequence]);
         const optimalNodeIds = new Set<string>(optimalSequence);
 
-        const maxWeight = Math.max(
-          ...data.edges.map((e) => e.weight),
-          1
-        );
+        const maxWeight = Math.max(...data.edges.map((e) => e.weight), 1);
 
         const nodes: ToolNodeType[] = data.nodes.map((n) => ({
           id: n.id,
@@ -184,7 +193,7 @@ export function ClusterExecutionGraph({
       cancelled = true;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathId, optimalKey]);
+  }, [pathId, groupName, optimalKey]);
 
   if (loading) {
     return (

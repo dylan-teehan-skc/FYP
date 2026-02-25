@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from analysis.clustering import ClusterResult
 from analysis.config import Settings
 from analysis.models import WorkflowTrace
 from analysis.pipeline import run_analysis, run_analysis_for_cluster
@@ -102,6 +103,7 @@ class TestRunAnalysisForCluster:
 
 
 class TestRunAnalysis:
+    @patch("analysis.pipeline.generate_cluster_name")
     @patch("analysis.pipeline.cluster_by_embedding")
     @patch("analysis.pipeline.reconstruct_trace")
     @patch("analysis.pipeline.subcluster_by_trace")
@@ -110,6 +112,7 @@ class TestRunAnalysis:
         mock_subcluster: MagicMock,
         mock_reconstruct: AsyncMock,
         mock_cluster: AsyncMock,
+        mock_naming: AsyncMock,
     ) -> None:
         mock_db = MockAnalysisDatabase()
         settings = Settings(
@@ -117,7 +120,10 @@ class TestRunAnalysis:
         )
 
         # Set up clustering to return one cluster with one workflow
-        mock_cluster.return_value = {"refund": ["wf-1"]}
+        mock_cluster.return_value = {
+            "refund": ClusterResult(["wf-1"], ["process refund"]),
+        }
+        mock_naming.return_value = "Refund Processing"
 
         # Set up trace reconstruction
         trace = WorkflowTrace(
@@ -132,8 +138,9 @@ class TestRunAnalysis:
         mock_subcluster.return_value = {"subcluster_0": [trace]}
 
         results = await run_analysis(mock_db, settings)
-        assert len(results) == 1
-        assert results[0].task_cluster == "refund"
+        # 1 subcluster + 1 group-level = 2
+        assert len(results) == 2
+        assert results[0].task_cluster == "Refund Processing"
 
     @patch("analysis.pipeline.cluster_by_embedding")
     async def test_no_clusters(self, mock_cluster: AsyncMock) -> None:
@@ -146,6 +153,7 @@ class TestRunAnalysis:
         results = await run_analysis(mock_db, settings)
         assert results == []
 
+    @patch("analysis.pipeline.generate_cluster_name")
     @patch("analysis.pipeline.cluster_by_embedding")
     @patch("analysis.pipeline.reconstruct_trace")
     @patch("analysis.pipeline.subcluster_by_trace")
@@ -154,13 +162,17 @@ class TestRunAnalysis:
         mock_subcluster: MagicMock,
         mock_reconstruct: AsyncMock,
         mock_cluster: AsyncMock,
+        mock_naming: AsyncMock,
     ) -> None:
         mock_db = MockAnalysisDatabase()
         settings = Settings(
             database_url="postgresql://test:test@localhost/test",
         )
 
-        mock_cluster.return_value = {"refund": ["wf-1", "wf-2"]}
+        mock_cluster.return_value = {
+            "refund": ClusterResult(["wf-1", "wf-2"], ["refund A", "refund B"]),
+        }
+        mock_naming.return_value = "Refund Processing"
 
         t1 = WorkflowTrace(
             workflow_id="wf-1",
@@ -179,15 +191,19 @@ class TestRunAnalysis:
             success=True,
         )
         # reconstruct_trace is called 2x in run_analysis (level-1 loop)
-        # + 1x per sub-cluster in run_analysis_for_cluster (level-2 loop) = 4 total
-        mock_reconstruct.side_effect = [t1, t2, t1, t2]
+        # + 1x per sub-cluster in run_analysis_for_cluster (level-2 loop)
+        # + 2x for group-level run_analysis_for_cluster = 6 total
+        mock_reconstruct.side_effect = [t1, t2, t1, t2, t1, t2]
         mock_subcluster.return_value = {
             "subcluster_0": [t1],
             "subcluster_1": [t2],
         }
 
         results = await run_analysis(mock_db, settings)
-        assert len(results) == 2
+        # 2 subclusters + 1 group-level = 3
+        assert len(results) == 3
         # Multiple subclusters → labels include sub_label
         labels = {r.task_cluster for r in results}
         assert any("subcluster" in label for label in labels)
+        # Group-level result uses parent cluster name
+        assert "Refund Processing" in labels

@@ -73,6 +73,38 @@ class TestReadQueries:
         result = await db.fetch_all_embeddings()
         assert result == []
 
+    async def test_fetch_embedding_for_workflow_found(self) -> None:
+        db = self._make_db()
+        db._pool.fetchrow = AsyncMock(return_value={"embedding": [0.1, 0.2, 0.3]})
+        result = await db.fetch_embedding_for_workflow(
+            "550e8400-e29b-41d4-a716-446655440000"
+        )
+        assert result == [0.1, 0.2, 0.3]
+
+    async def test_fetch_embedding_for_workflow_string(self) -> None:
+        db = self._make_db()
+        db._pool.fetchrow = AsyncMock(return_value={"embedding": "[0.1,0.2,0.3]"})
+        result = await db.fetch_embedding_for_workflow(
+            "550e8400-e29b-41d4-a716-446655440000"
+        )
+        assert result == [0.1, 0.2, 0.3]
+
+    async def test_fetch_embedding_for_workflow_not_found(self) -> None:
+        db = self._make_db()
+        db._pool.fetchrow = AsyncMock(return_value=None)
+        result = await db.fetch_embedding_for_workflow(
+            "550e8400-e29b-41d4-a716-446655440000"
+        )
+        assert result is None
+
+    async def test_fetch_embedding_for_workflow_null_embedding(self) -> None:
+        db = self._make_db()
+        db._pool.fetchrow = AsyncMock(return_value={"embedding": None})
+        result = await db.fetch_embedding_for_workflow(
+            "550e8400-e29b-41d4-a716-446655440000"
+        )
+        assert result is None
+
 
 class TestWriteQueries:
     def _make_db(self) -> Database:
