@@ -54,34 +54,35 @@ def normalized_edit_distance(seq_a: list[str], seq_b: list[str]) -> float:
     return (2 * raw) / (len(seq_a) + len(seq_b))
 
 
-def assign_cluster_label(descriptions: list[str]) -> str:
-    """Choose a representative label for a cluster (shortest description)."""
-    if not descriptions:
-        return "unknown"
-    return min(descriptions, key=len)
+class ClusterResult:
+    """Result of Level-1 embedding clustering."""
+
+    __slots__ = ("workflow_ids", "descriptions")
+
+    def __init__(self, workflow_ids: list[str], descriptions: list[str]) -> None:
+        self.workflow_ids = workflow_ids
+        self.descriptions = descriptions
 
 
 async def cluster_by_embedding(
     db: Database,
     similarity_threshold: float = 0.60,
     min_executions: int = 3,
-) -> dict[str, list[str]]:
+) -> dict[str, ClusterResult]:
     """Group workflow_ids by task description embedding similarity.
 
-    Level 1 clustering: greedy cosine similarity on pgvector embeddings.
-    Returns {cluster_label: [workflow_id, ...]}.
+    Level 1 clustering: HAC with average linkage on cosine distances.
+    Returns {cluster_key: ClusterResult(workflow_ids, descriptions)}.
     """
     rows = await db.fetch_all_embeddings()
     if not rows:
         return {}
 
-    # Parse embedding data
     items: list[dict[str, Any]] = []
     for r in rows:
         embedding = r["embedding"]
         if embedding is None:
             continue
-        # asyncpg may return embedding as string or list
         if isinstance(embedding, str):
             embedding = [float(x) for x in embedding.strip("[]").split(",")]
         items.append({
@@ -93,30 +94,31 @@ async def cluster_by_embedding(
     if not items:
         return {}
 
-    # Greedy clustering
-    assigned: set[int] = set()
-    clusters: dict[str, list[str]] = {}
+    if len(items) == 1:
+        return {"cluster_0": ClusterResult(
+            [items[0]["workflow_id"]], [items[0]["description"]],
+        )}
 
-    for i, item in enumerate(items):
-        if i in assigned:
-            continue
+    n = len(items)
+    condensed = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            sim = cosine_similarity(items[i]["embedding"], items[j]["embedding"])
+            condensed.append(max(0.0, 1.0 - sim))
 
-        cluster_ids = [item["workflow_id"]]
-        cluster_descs = [item["description"]]
-        assigned.add(i)
+    z = linkage(np.array(condensed), method="average")
+    labels = fcluster(z, t=1.0 - similarity_threshold, criterion="distance")
 
-        for j in range(i + 1, len(items)):
-            if j in assigned:
-                continue
-            sim = cosine_similarity(item["embedding"], items[j]["embedding"])
-            if sim >= similarity_threshold:
-                cluster_ids.append(items[j]["workflow_id"])
-                cluster_descs.append(items[j]["description"])
-                assigned.add(j)
+    raw_clusters: dict[int, ClusterResult] = {}
+    for item, label in zip(items, labels):
+        raw_clusters.setdefault(label, ClusterResult([], []))
+        raw_clusters[label].workflow_ids.append(item["workflow_id"])
+        raw_clusters[label].descriptions.append(item["description"])
 
-        if len(cluster_ids) >= min_executions:
-            label = assign_cluster_label(cluster_descs)
-            clusters[label] = cluster_ids
+    clusters = {
+        f"cluster_{label}": cr for label, cr in raw_clusters.items()
+        if len(cr.workflow_ids) >= min_executions
+    }
 
     log.info("embedding_clusters", count=len(clusters))
     return clusters

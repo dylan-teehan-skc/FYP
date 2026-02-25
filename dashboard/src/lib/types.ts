@@ -52,6 +52,7 @@ export interface EventOut {
 
 export interface TraceOut {
   workflow_id: string;
+  task_description: string | null;
   events: EventOut[];
   total_events: number;
 }
@@ -152,10 +153,21 @@ export interface TaskClusterSummary {
   execution_count: number;
   workflow_count: number;
   updated_at: string;
+  task_description: string | null;
 }
 
 export interface TaskClustersResponse {
   clusters: TaskClusterSummary[];
+}
+
+export interface ClusterGroup {
+  name: string;
+  subclusters: TaskClusterSummary[];
+  total_workflows: number;
+}
+
+export interface ClusterGroupsResponse {
+  groups: ClusterGroup[];
 }
 
 export interface ClusterWorkflow {
@@ -187,6 +199,19 @@ export interface ClusterDetailResponse {
   workflows: ClusterWorkflow[];
   mode_stats: ClusterModeStats;
   avg_conformance: number | null;
+}
+
+export interface ClusterGroupDetailResponse {
+  name: string;
+  subclusters: TaskClusterSummary[];
+  total_workflows: number;
+  avg_duration_ms: number | null;
+  avg_steps: number | null;
+  success_rate: number | null;
+  workflows: ClusterWorkflow[];
+  mode_stats: ClusterModeStats;
+  avg_conformance: number | null;
+  optimal_sequence: string[];
 }
 
 // === Action types ===

@@ -12,10 +12,11 @@ class Settings(BaseSettings):
     database_pool_min: int = 2
     database_pool_max: int = 10
     embedding_model: str = "gemini/gemini-embedding-001"
+    llm_model: str = "gemini/gemini-2.5-flash-lite"
     log_level: str = "INFO"
 
     # Analysis tuning
-    similarity_threshold: float = 0.85
+    similarity_threshold: float = 0.78
     min_success_rate: float = 0.85
     min_executions: int = 3
     bottleneck_threshold_pct: float = 0.40

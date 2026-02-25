@@ -63,6 +63,36 @@ CUSTOMERS = {
         "email": "ivy.johansson@email.com",
         "tier": "standard",
     },
+    "C-110": {
+        "customer_id": "C-110",
+        "name": "Jake Morrison",
+        "email": "jake.morrison@email.com",
+        "tier": "gold",
+    },
+    "C-111": {
+        "customer_id": "C-111",
+        "name": "Karen Liu",
+        "email": "karen.liu@email.com",
+        "tier": "standard",
+    },
+    "C-112": {
+        "customer_id": "C-112",
+        "name": "Leo Santos",
+        "email": "leo.santos@email.com",
+        "tier": "platinum",
+    },
+    "C-113": {
+        "customer_id": "C-113",
+        "name": "Mia Thompson",
+        "email": "mia.thompson@email.com",
+        "tier": "standard",
+    },
+    "C-114": {
+        "customer_id": "C-114",
+        "name": "Noah Andersen",
+        "email": "noah.andersen@email.com",
+        "tier": "gold",
+    },
 }
 
 INITIAL_ORDERS = {
@@ -165,6 +195,51 @@ INITIAL_ORDERS = {
         "days_since_delivery": 3,
         "payment_method": "credit_card",
     },
+    "ORD-5012": {
+        "order_id": "ORD-5012",
+        "customer_id": "C-110",
+        "product": "Noise-Cancelling Headphones",
+        "amount": 349.99,
+        "status": "delivered",
+        "days_since_delivery": 12,
+        "payment_method": "credit_card",
+    },
+    "ORD-5013": {
+        "order_id": "ORD-5013",
+        "customer_id": "C-111",
+        "product": "Smart Watch Pro",
+        "amount": 299.99,
+        "status": "delivered",
+        "days_since_delivery": 15,
+        "payment_method": "paypal",
+    },
+    "ORD-5014": {
+        "order_id": "ORD-5014",
+        "customer_id": "C-112",
+        "product": "4K Webcam Ultra",
+        "amount": 189.99,
+        "status": "delivered",
+        "days_since_delivery": 8,
+        "payment_method": "credit_card",
+    },
+    "ORD-5015": {
+        "order_id": "ORD-5015",
+        "customer_id": "C-113",
+        "product": "Wireless Earbuds Pro",
+        "amount": 79.99,
+        "status": "shipped",
+        "days_since_delivery": None,
+        "payment_method": "debit_card",
+    },
+    "ORD-5016": {
+        "order_id": "ORD-5016",
+        "customer_id": "C-114",
+        "product": "Bluetooth Speaker",
+        "amount": 159.00,
+        "status": "delivered",
+        "days_since_delivery": 6,
+        "payment_method": "credit_card",
+    },
 }
 
 INITIAL_TICKETS = {
@@ -258,6 +333,51 @@ INITIAL_TICKETS = {
         "subject": "Cancel my laptop stand order",
         "created_at": _days_ago(1),
     },
+    "T-1011": {
+        "ticket_id": "T-1011",
+        "customer_id": "C-110",
+        "order_id": "ORD-5012",
+        "type": "refund_request",
+        "status": "open",
+        "subject": "Want refund for Noise-Cancelling Headphones",
+        "created_at": _days_ago(1),
+    },
+    "T-1012": {
+        "ticket_id": "T-1012",
+        "customer_id": "C-111",
+        "order_id": "ORD-5013",
+        "type": "complaint",
+        "status": "open",
+        "subject": "Smart Watch screen flickering after update",
+        "created_at": _days_ago(1),
+    },
+    "T-1013": {
+        "ticket_id": "T-1013",
+        "customer_id": "C-112",
+        "order_id": "ORD-5014",
+        "type": "complaint",
+        "status": "open",
+        "subject": "Webcam keeps disconnecting during video calls",
+        "created_at": _days_ago(1),
+    },
+    "T-1014": {
+        "ticket_id": "T-1014",
+        "customer_id": "C-113",
+        "order_id": "ORD-5015",
+        "type": "order_inquiry",
+        "status": "open",
+        "subject": "Where are my Wireless Earbuds Pro?",
+        "created_at": _days_ago(1),
+    },
+    "T-1015": {
+        "ticket_id": "T-1015",
+        "customer_id": "C-114",
+        "order_id": "ORD-5016",
+        "type": "refund_request",
+        "status": "open",
+        "subject": "Return request for Bluetooth Speaker",
+        "created_at": _days_ago(1),
+    },
 }
 
 REFUND_WINDOW_DAYS = 30
@@ -279,6 +399,14 @@ SHIPPING_INFO = {
         "status": "in_transit",
         "estimated_delivery": _days_ago(-1),
         "last_location": "Sorting Facility, Denver CO",
+    },
+    "ORD-5015": {
+        "order_id": "ORD-5015",
+        "carrier": "USPS",
+        "tracking_number": "USPS-3847562910",
+        "status": "in_transit",
+        "estimated_delivery": _days_ago(-3),
+        "last_location": "Regional Hub, Atlanta GA",
     },
 }
 

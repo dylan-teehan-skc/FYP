@@ -198,6 +198,69 @@ SCENARIOS: list[Scenario] = [
         ),
         expected_steps=5,
     ),
+    Scenario(
+        ticket_id="T-1011",
+        order_id="ORD-5012",
+        customer_id="C-110",
+        workflow_type="refund_request",
+        task_description=(
+            "Support ticket T-1011: Jake Morrison wants a refund for "
+            "his Noise-Cancelling Headphones from order ORD-5012. "
+            "They hurt his ears after extended use. "
+            "Please resolve this ticket."
+        ),
+        expected_steps=6,
+    ),
+    Scenario(
+        ticket_id="T-1012",
+        order_id="ORD-5013",
+        customer_id="C-111",
+        workflow_type="complaint",
+        task_description=(
+            "Support ticket T-1012: Karen Liu is complaining that her "
+            "Smart Watch Pro from order ORD-5013 has a screen that "
+            "flickers after a recent software update. "
+            "Please resolve this ticket."
+        ),
+        expected_steps=6,
+    ),
+    Scenario(
+        ticket_id="T-1013",
+        order_id="ORD-5014",
+        customer_id="C-112",
+        workflow_type="complaint",
+        task_description=(
+            "Support ticket T-1013: Leo Santos reports that his "
+            "4K Webcam Ultra from order ORD-5014 keeps disconnecting "
+            "during video calls. Please resolve this ticket."
+        ),
+        expected_steps=6,
+    ),
+    Scenario(
+        ticket_id="T-1014",
+        order_id="ORD-5015",
+        customer_id="C-113",
+        workflow_type="order_inquiry",
+        task_description=(
+            "Support ticket T-1014: Mia Thompson is asking where her "
+            "Wireless Earbuds Pro are. Order ORD-5015 was placed a "
+            "week ago and she hasn't received them yet. "
+            "Please resolve this ticket."
+        ),
+        expected_steps=4,
+    ),
+    Scenario(
+        ticket_id="T-1015",
+        order_id="ORD-5016",
+        customer_id="C-114",
+        workflow_type="refund_request",
+        task_description=(
+            "Support ticket T-1015: Noah Andersen wants to return his "
+            "Bluetooth Speaker from order ORD-5016. He says the sound "
+            "quality is disappointing. Please resolve this ticket."
+        ),
+        expected_steps=6,
+    ),
 ]
 
 

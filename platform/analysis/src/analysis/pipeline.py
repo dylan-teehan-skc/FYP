@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env", override=False)
 
 from analysis.clustering import cluster_by_embedding, subcluster_by_trace
 from analysis.config import Settings, get_settings
@@ -14,6 +19,7 @@ from analysis.graph import (
 )
 from analysis.logger import get_logger, init_logging
 from analysis.models import AnalysisResult
+from analysis.naming import generate_cluster_name
 from analysis.optimizer import find_pareto_paths, select_knee_point
 from analysis.patterns import detect_patterns
 from analysis.suggestions import generate_suggestions
@@ -135,12 +141,21 @@ async def run_analysis(
         return []
 
     results = []
-    for cluster_label, workflow_ids in clusters.items():
+    for idx, (cluster_label, cluster_result) in enumerate(clusters.items()):
         # Level 2: Trace sub-clustering
         traces = []
-        for wf_id in workflow_ids:
+        for wf_id in cluster_result.workflow_ids:
             trace = await reconstruct_trace(db, wf_id)
             traces.append(trace)
+
+        # Rate-limit: space out LLM calls to avoid 429s on free-tier APIs
+        if idx > 0:
+            await asyncio.sleep(10)
+
+        # Generate LLM cluster name from task descriptions
+        cluster_name = await generate_cluster_name(
+            cluster_result.descriptions, settings.llm_model,
+        )
 
         subclusters = subcluster_by_trace(
             traces, ned_threshold=settings.ned_threshold
@@ -148,14 +163,21 @@ async def run_analysis(
 
         for sub_label, sub_traces in subclusters.items():
             sub_wf_ids = [t.workflow_id for t in sub_traces]
-            full_label = f"{cluster_label}"
+            full_label = cluster_name
             if len(subclusters) > 1:
-                full_label = f"{cluster_label} ({sub_label})"
+                full_label = f"{cluster_name} ({sub_label})"
 
             result = await run_analysis_for_cluster(
                 db, full_label, sub_wf_ids, settings
             )
             results.append(result)
+
+        # Group-level optimal path: run analysis across ALL workflows in this cluster
+        all_wf_ids = [str(wf) for wf in cluster_result.workflow_ids]
+        group_result = await run_analysis_for_cluster(
+            db, cluster_name, all_wf_ids, settings
+        )
+        results.append(group_result)
 
     log.info("analysis_complete", clusters=len(results))
     return results

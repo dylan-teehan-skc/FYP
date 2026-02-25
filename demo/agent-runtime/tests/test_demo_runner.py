@@ -21,8 +21,8 @@ from demo_runner import (
 
 
 class TestScenarioDefinitions:
-    def test_ten_scenarios_defined(self) -> None:
-        assert len(SCENARIOS) == 10
+    def test_fifteen_scenarios_defined(self) -> None:
+        assert len(SCENARIOS) == 15
 
     def test_all_scenarios_have_required_fields(self) -> None:
         valid_types = {

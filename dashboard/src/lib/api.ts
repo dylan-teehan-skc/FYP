@@ -4,6 +4,8 @@ import type {
   AnalyticsSummary,
   BottlenecksResponse,
   ClusterDetailResponse,
+  ClusterGroupDetailResponse,
+  ClusterGroupsResponse,
   ComparisonResponse,
   ExecutionGraphResponse,
   ModeDistribution,
@@ -64,6 +66,9 @@ export const api = {
 
   getTaskClusters: () => fetchApi<TaskClustersResponse>("/task-clusters"),
 
+  getClusterGroups: () =>
+    fetchApi<ClusterGroupsResponse>("/task-clusters/grouped"),
+
   getClusterDetail: (pathId: string) =>
     fetchApi<ClusterDetailResponse>(`/task-clusters/${pathId}/workflows`),
 
@@ -72,6 +77,21 @@ export const api = {
 
   getClusterBottlenecks: (pathId: string) =>
     fetchApi<BottlenecksResponse>(`/task-clusters/${pathId}/bottlenecks`),
+
+  getClusterGroupDetail: (name: string) =>
+    fetchApi<ClusterGroupDetailResponse>(
+      `/task-clusters/group/${encodeURIComponent(name)}/detail`,
+    ),
+
+  getClusterGroupExecutionGraph: (name: string) =>
+    fetchApi<ExecutionGraphResponse>(
+      `/task-clusters/group/${encodeURIComponent(name)}/execution-graph`,
+    ),
+
+  getClusterGroupBottlenecks: (name: string) =>
+    fetchApi<BottlenecksResponse>(
+      `/task-clusters/group/${encodeURIComponent(name)}/bottlenecks`,
+    ),
 
   runAnalysis: () => postApi<ActionResponse>("/actions/run-analysis"),
 

@@ -21,6 +21,7 @@ class MockDatabase:
         self.insert_event = AsyncMock(side_effect=self._insert_event)
         self.insert_events_batch = AsyncMock(side_effect=self._insert_events_batch)
         self.get_workflow_trace = AsyncMock(return_value=[])
+        self.get_task_description = AsyncMock(return_value=None)
         self.upsert_embedding = AsyncMock()
         self.find_similar_paths = AsyncMock(return_value=None)
         self.get_analytics_summary = AsyncMock(return_value={
