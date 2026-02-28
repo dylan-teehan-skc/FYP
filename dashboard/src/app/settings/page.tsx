@@ -6,8 +6,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { formatNumber } from "@/lib/format";
-import type { AnalyticsSummary } from "@/lib/types";
-import { Database, Activity, Server, Play, FlaskConical, Loader2 } from "lucide-react";
+import type {
+  ActionResponse,
+  ActionStatusResponse,
+  AnalyticsSummary,
+} from "@/lib/types";
+import {
+  Database,
+  Activity,
+  Server,
+  Play,
+  FlaskConical,
+  Loader2,
+} from "lucide-react";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 
 const THRESHOLDS = [
@@ -36,6 +47,40 @@ const THRESHOLDS = [
     label: "Bottleneck Threshold",
     value: "40%",
     description: "Duration percentage to flag a tool as a bottleneck",
+  },
+];
+
+type DemoType = "demo" | "langchain_single" | "langchain_multi";
+
+interface DemoButton {
+  type: DemoType;
+  label: string;
+  scenariosPerRound: number;
+  run: (rounds: number) => Promise<ActionResponse>;
+  statusKey: keyof ActionStatusResponse;
+}
+
+const DEMO_BUTTONS: DemoButton[] = [
+  {
+    type: "demo",
+    label: "Agent Runtime",
+    scenariosPerRound: 5,
+    run: (r) => api.runDemo(r),
+    statusKey: "demo_running",
+  },
+  {
+    type: "langchain_single",
+    label: "LC Single-Agent",
+    scenariosPerRound: 7,
+    run: (r) => api.runLangchainSingle(r),
+    statusKey: "langchain_single_running",
+  },
+  {
+    type: "langchain_multi",
+    label: "LC Multi-Agent",
+    scenariosPerRound: 7,
+    run: (r) => api.runLangchainMulti(r),
+    statusKey: "langchain_multi_running",
   },
 ];
 
@@ -74,12 +119,15 @@ export default function SettingsPage() {
     "online" | "offline" | "checking"
   >("checking");
 
-  // Action states
+  // Analysis state
   const [analysisRunning, setAnalysisRunning] = useState(false);
   const [analysisMsg, setAnalysisMsg] = useState<string | null>(null);
+
+  // Demo state (shared across all demo types — only one runs at a time)
+  const [demoRounds, setDemoRounds] = useState(1);
+  const [activeDemo, setActiveDemo] = useState<DemoType | null>(null);
   const [demoRunning, setDemoRunning] = useState(false);
   const [demoMsg, setDemoMsg] = useState<string | null>(null);
-  const [demoRounds, setDemoRounds] = useState(1);
   const [demoProgress, setDemoProgress] = useState(0);
   const [demoTotal, setDemoTotal] = useState(0);
   const startWorkflowsRef = useRef(0);
@@ -95,7 +143,6 @@ export default function SettingsPage() {
       .catch(() => setCollectorStatus("offline"));
   }, []);
 
-  // Poll for demo progress
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
@@ -110,48 +157,61 @@ export default function SettingsPage() {
   // Resume polling if actions are already running (e.g. navigated away and back)
   useEffect(() => {
     let cancelled = false;
-    api.getActionStatus().then((status) => {
-      if (cancelled) return;
-      if (status.analysis_running) {
-        setAnalysisRunning(true);
-        setAnalysisMsg("Running...");
-      }
-      if (status.demo_running) {
-        setDemoRunning(true);
-        setDemoMsg("In progress...");
-        // Start polling to track progress
-        api.getAnalyticsSummary().then((s) => {
-          if (cancelled) return;
-          setSummary(s);
-          startWorkflowsRef.current = 0;
-          pollRef.current = setInterval(async () => {
-            try {
-              const st = await api.getActionStatus();
-              const fresh = await api.getAnalyticsSummary();
-              setSummary(fresh);
-              if (!st.demo_running) {
-                stopPolling();
-                setDemoRunning(false);
-                setDemoMsg(`Done — ${fresh.total_workflows} workflows`);
-                if (st.analysis_running) {
-                  setAnalysisRunning(true);
-                  setAnalysisMsg("Running...");
+    api
+      .getActionStatus()
+      .then((status) => {
+        if (cancelled) return;
+        if (status.analysis_running) {
+          setAnalysisRunning(true);
+          setAnalysisMsg("Running...");
+        }
+        const runningBtn = DEMO_BUTTONS.find((b) => status[b.statusKey]);
+        if (runningBtn) {
+          setActiveDemo(runningBtn.type);
+          setDemoRunning(true);
+          setDemoMsg("In progress...");
+          api
+            .getAnalyticsSummary()
+            .then((s) => {
+              if (cancelled) return;
+              setSummary(s);
+              startWorkflowsRef.current = 0;
+              pollRef.current = setInterval(async () => {
+                try {
+                  const st = await api.getActionStatus();
+                  const fresh = await api.getAnalyticsSummary();
+                  setSummary(fresh);
+                  if (!st[runningBtn.statusKey]) {
+                    stopPolling();
+                    setDemoRunning(false);
+                    setActiveDemo(null);
+                    setDemoMsg(
+                      `Done — ${fresh.total_workflows} workflows`,
+                    );
+                    if (st.analysis_running) {
+                      setAnalysisRunning(true);
+                      setAnalysisMsg("Running...");
+                    }
+                  }
+                  if (!st.analysis_running && analysisRunning) {
+                    setAnalysisRunning(false);
+                    setAnalysisMsg("Complete");
+                  }
+                } catch {
+                  stopPolling();
+                  setDemoRunning(false);
+                  setActiveDemo(null);
                 }
-              }
-              if (!st.analysis_running && analysisRunning) {
-                setAnalysisRunning(false);
-                setAnalysisMsg("Complete");
-              }
-            } catch {
-              stopPolling();
-              setDemoRunning(false);
-            }
-          }, 2000);
-        }).catch(() => {});
-      }
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+              }, 2000);
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleRunAnalysis = async () => {
@@ -165,7 +225,6 @@ export default function SettingsPage() {
         return;
       }
       setAnalysisMsg("Running...");
-      // Poll status until done
       const poll = setInterval(async () => {
         try {
           const status = await api.getActionStatus();
@@ -173,7 +232,6 @@ export default function SettingsPage() {
             clearInterval(poll);
             setAnalysisRunning(false);
             setAnalysisMsg("Complete");
-            // Refresh summary
             api.getAnalyticsSummary().then(setSummary).catch(() => {});
           }
         } catch {
@@ -188,23 +246,24 @@ export default function SettingsPage() {
     }
   };
 
-  const handleRunDemo = async () => {
+  const handleRunDemo = async (btn: DemoButton) => {
+    setActiveDemo(btn.type);
     setDemoRunning(true);
     setDemoMsg(null);
     setDemoProgress(0);
     startWorkflowsRef.current = summary?.total_workflows ?? 0;
     try {
-      const res = await api.runDemo(demoRounds);
+      const res = await btn.run(demoRounds);
       if (res.status === "already_running") {
         setDemoMsg("Already running");
         setDemoRunning(false);
+        setActiveDemo(null);
         return;
       }
-      const total = res.total_scenarios || 5;
+      const total = res.total_scenarios || btn.scenariosPerRound;
       setDemoTotal(total);
       setDemoMsg(`0 / ${total} scenarios`);
 
-      // Poll workflow count to track progress
       stopPolling();
       pollRef.current = setInterval(async () => {
         try {
@@ -213,27 +272,33 @@ export default function SettingsPage() {
           setSummary(s);
           const completed = Math.min(
             s.total_workflows - startWorkflowsRef.current,
-            total
+            total,
           );
           setDemoProgress(completed);
           setDemoMsg(`${completed} / ${total} scenarios`);
 
-          if (!status.demo_running) {
+          if (!status[btn.statusKey]) {
             stopPolling();
             setDemoRunning(false);
-            const final = s.total_workflows - startWorkflowsRef.current;
-            setDemoMsg(`Done — ${final} scenarios completed. Running analysis...`);
+            const finalCount =
+              s.total_workflows - startWorkflowsRef.current;
+            setDemoMsg(
+              `Done — ${finalCount} scenarios completed. Running analysis...`,
+            );
             setDemoProgress(total);
+            setActiveDemo(null);
             handleRunAnalysis();
           }
         } catch {
           stopPolling();
           setDemoRunning(false);
+          setActiveDemo(null);
           setDemoMsg("Error checking status");
         }
       }, 2000);
     } catch (err: unknown) {
       setDemoRunning(false);
+      setActiveDemo(null);
       setDemoMsg(err instanceof Error ? err.message : "Failed");
     }
   };
@@ -339,10 +404,10 @@ export default function SettingsPage() {
             <CardContent className="p-4">
               <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Actions{" "}
-                <InfoTooltip text="Run the analysis pipeline to discover optimal paths from recorded workflows, or run a demo round to generate 5 new scenario executions." />
+                <InfoTooltip text="Run the analysis pipeline to discover optimal paths, or run a demo to generate new scenario executions." />
               </p>
 
-              <div className="flex items-center gap-3">
+              <div className="space-y-3">
                 <Button
                   size="sm"
                   variant="outline"
@@ -357,37 +422,46 @@ export default function SettingsPage() {
                   {analysisRunning ? "Running..." : "Run Analysis"}
                 </Button>
 
-                <div className="flex items-center rounded-md border border-border">
-                  <div className="flex items-center gap-1.5 border-r border-border px-2.5 py-1.5">
-                    <span className="text-xs text-muted-foreground">Rounds</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5">
+                    <span className="text-xs text-muted-foreground">
+                      Rounds
+                    </span>
                     <input
                       type="number"
                       min={1}
                       max={10}
                       value={demoRounds}
                       onChange={(e) =>
-                        setDemoRounds(Math.max(1, Math.min(10, Number(e.target.value) || 1)))
+                        setDemoRounds(
+                          Math.max(
+                            1,
+                            Math.min(10, Number(e.target.value) || 1),
+                          ),
+                        )
                       }
                       disabled={demoRunning}
                       className="h-5 w-8 bg-transparent text-center text-sm font-mono tabular-nums text-foreground outline-none disabled:opacity-50"
                     />
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={demoRunning || collectorStatus !== "online"}
-                    onClick={handleRunDemo}
-                    className="rounded-l-none border-0"
-                  >
-                    {demoRunning ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Play className="h-3 w-3" />
-                    )}
-                    {demoRunning
-                      ? "Running..."
-                      : `Run Demo (${demoRounds * 5})`}
-                  </Button>
+                  {DEMO_BUTTONS.map((btn) => (
+                    <Button
+                      key={btn.type}
+                      size="sm"
+                      variant="outline"
+                      disabled={demoRunning || collectorStatus !== "online"}
+                      onClick={() => handleRunDemo(btn)}
+                    >
+                      {activeDemo === btn.type && demoRunning ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Play className="h-3 w-3" />
+                      )}
+                      {activeDemo === btn.type && demoRunning
+                        ? "Running..."
+                        : `${btn.label} (${demoRounds * btn.scenariosPerRound})`}
+                    </Button>
+                  ))}
                 </div>
               </div>
 
@@ -396,7 +470,8 @@ export default function SettingsPage() {
                 <p className="mt-2 text-xs text-muted-foreground">
                   {analysisMsg === "Complete" ? (
                     <span className="text-emerald-400">{analysisMsg}</span>
-                  ) : analysisMsg.startsWith("Error") || analysisMsg.startsWith("Failed") ? (
+                  ) : analysisMsg.startsWith("Error") ||
+                    analysisMsg.startsWith("Failed") ? (
                     <span className="text-red-400">{analysisMsg}</span>
                   ) : (
                     analysisMsg

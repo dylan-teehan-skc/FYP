@@ -20,6 +20,8 @@ ANALYSIS_DIR = PROJECT_ROOT / "platform" / "analysis"
 DEMO_PYTHON = PROJECT_ROOT / "demo" / "agent-runtime" / ".venv" / "bin" / "python3"
 DEMO_DIR = PROJECT_ROOT / "demo" / "agent-runtime"
 DEMO_SCRIPT = DEMO_DIR / "demo_runner.py"
+LANGCHAIN_PYTHON = PROJECT_ROOT / "demo" / "langchain" / ".venv" / "bin" / "python3"
+LANGCHAIN_DIR = PROJECT_ROOT / "demo" / "langchain"
 
 _running_tasks: dict[str, asyncio.Task[Any]] = {}
 
@@ -37,6 +39,8 @@ class ActionOut(BaseModel):
 class StatusOut(BaseModel):
     demo_running: bool = False
     analysis_running: bool = False
+    langchain_single_running: bool = False
+    langchain_multi_running: bool = False
     message: str = ""
 
 
@@ -81,6 +85,30 @@ async def _run_demo_task(rounds: int) -> None:
         _running_tasks.pop("demo", None)
 
 
+async def _run_langchain_single_task(rounds: int) -> None:
+    try:
+        await _run_subprocess(
+            "langchain_single",
+            str(LANGCHAIN_PYTHON), "-m", "single_agent.main",
+            "--rounds", str(rounds),
+            cwd=LANGCHAIN_DIR,
+        )
+    finally:
+        _running_tasks.pop("langchain_single", None)
+
+
+async def _run_langchain_multi_task(rounds: int) -> None:
+    try:
+        await _run_subprocess(
+            "langchain_multi",
+            str(LANGCHAIN_PYTHON), "-m", "multi_agent.main",
+            "--rounds", str(rounds),
+            cwd=LANGCHAIN_DIR,
+        )
+    finally:
+        _running_tasks.pop("langchain_multi", None)
+
+
 @router.post("/run-analysis")
 async def run_analysis(request: Request) -> ActionOut:
     """Trigger the analysis pipeline as a background task."""
@@ -112,20 +140,74 @@ async def run_demo(body: RunDemoIn) -> ActionOut:
     )
 
 
+@router.post("/run-langchain-single")
+async def run_langchain_single(body: RunDemoIn) -> ActionOut:
+    """Trigger LangChain single-agent demo as a background task."""
+    if "langchain_single" in _running_tasks and not _running_tasks["langchain_single"].done():
+        return ActionOut(
+            status="already_running",
+            message="LangChain single-agent demo is already running",
+        )
+
+    rounds = max(1, min(body.rounds, 10))
+    total = rounds * 7
+    task = asyncio.create_task(_run_langchain_single_task(rounds))
+    _running_tasks["langchain_single"] = task
+    return ActionOut(
+        status="started",
+        message=f"Running {rounds} round(s) — {total} scenarios",
+        total_scenarios=total,
+    )
+
+
+@router.post("/run-langchain-multi")
+async def run_langchain_multi(body: RunDemoIn) -> ActionOut:
+    """Trigger LangChain multi-agent demo as a background task."""
+    if "langchain_multi" in _running_tasks and not _running_tasks["langchain_multi"].done():
+        return ActionOut(
+            status="already_running",
+            message="LangChain multi-agent demo is already running",
+        )
+
+    rounds = max(1, min(body.rounds, 10))
+    total = rounds * 7
+    task = asyncio.create_task(_run_langchain_multi_task(rounds))
+    _running_tasks["langchain_multi"] = task
+    return ActionOut(
+        status="started",
+        message=f"Running {rounds} round(s) — {total} scenarios",
+        total_scenarios=total,
+    )
+
+
 @router.get("/status")
 async def get_status() -> StatusOut:
     """Check if any background tasks are running."""
     demo_running = "demo" in _running_tasks and not _running_tasks["demo"].done()
     analysis_running = "analysis" in _running_tasks and not _running_tasks["analysis"].done()
+    lc_single = (
+        "langchain_single" in _running_tasks
+        and not _running_tasks["langchain_single"].done()
+    )
+    lc_multi = (
+        "langchain_multi" in _running_tasks
+        and not _running_tasks["langchain_multi"].done()
+    )
 
     parts = []
     if demo_running:
         parts.append("Demo running")
+    if lc_single:
+        parts.append("LangChain single-agent running")
+    if lc_multi:
+        parts.append("LangChain multi-agent running")
     if analysis_running:
         parts.append("Analysis running")
 
     return StatusOut(
         demo_running=demo_running,
         analysis_running=analysis_running,
+        langchain_single_running=lc_single,
+        langchain_multi_running=lc_multi,
         message=" | ".join(parts) if parts else "Idle",
     )

@@ -98,5 +98,11 @@ export const api = {
   runDemo: (rounds = 1) =>
     postApi<ActionResponse>("/actions/run-demo", { rounds }),
 
+  runLangchainSingle: (rounds = 1) =>
+    postApi<ActionResponse>("/actions/run-langchain-single", { rounds }),
+
+  runLangchainMulti: (rounds = 1) =>
+    postApi<ActionResponse>("/actions/run-langchain-multi", { rounds }),
+
   getActionStatus: () => fetchApi<ActionStatusResponse>("/actions/status"),
 };
