@@ -23,10 +23,12 @@ platform/                Backend services (deployed together).
   collector/             FastAPI event receiver + pgvector queries.
   analysis/              Process mining, pattern detection, Pareto-optimal path discovery.
 dashboard/               React/Next.js frontend for visualisation and metrics.
-demo/                    Example consumer (proves the platform works).
-  agent-runtime/         Async Python agent system with LLM reasoning.
-  mcp-tool-server/       FastAPI mock tools (8 customer support tools).
-  demo_runner.py         Runs the 5 NovaTech demo scenarios.
+demo/                    Example consumers (prove the platform works with different frameworks).
+  agent-runtime/         Custom async Python agent system with LLM reasoning.
+  langchain/             LangChain/LangGraph integration demos.
+    single_agent/        Single-agent tool-calling loop via LangChain.
+    multi_agent/         Multi-agent supervisor + specialist graph via LangGraph.
+  mcp-tool-server/       FastAPI mock tools (13 customer support tools).
 public-docs/             Architecture and design documentation.
 ```
 
@@ -72,8 +74,14 @@ cd demo/mcp-tool-server && uv sync
 # Agent Runtime (needs SDK installed first)
 cd demo/agent-runtime && pip install -e ../../sdk && pip install -e ".[dev]"
 
+# LangChain demo (needs SDK installed first)
+cd demo/langchain && pip install -e ../../sdk && pip install -e ".[dev]"
+
 # Analysis Engine
 cd platform/analysis && pip install -e ".[dev]"
+
+# Dashboard
+cd dashboard && npm install
 ```
 
 ### Run the platform
@@ -90,13 +98,20 @@ cd platform/collector && .venv/bin/collector
 # Tab 3: Start the MCP tool server
 cd demo/mcp-tool-server && .venv/bin/python3 main.py
 
-# Tab 4: Run the demo (5 scenarios x 3 rounds = 15 workflows)
+# Tab 4: Start the dashboard
+cd dashboard && npm run dev
+
+# Tab 5: Run the agent-runtime demo (5 scenarios x 3 rounds = 15 workflows)
 cd demo/agent-runtime && PYTHONPATH=. .venv/bin/python3 demo_runner.py --rounds 3
 
-# 5. Run analysis to discover optimal paths
+# Or run the LangChain demos instead (7 scenarios x 2 rounds = 14 workflows each)
+cd demo/langchain && PYTHONPATH=. .venv/bin/python3 -m single_agent.main --rounds 2
+cd demo/langchain && PYTHONPATH=. .venv/bin/python3 -m multi_agent.main --rounds 2
+
+# Run analysis to discover optimal paths
 cd platform/analysis && .venv/bin/python -m analysis.pipeline
 
-# 6. Run the demo again — some scenarios now get guided mode
+# Run the demos again — some scenarios now get guided mode
 cd demo/agent-runtime && PYTHONPATH=. .venv/bin/python3 demo_runner.py --rounds 3
 ```
 
@@ -106,32 +121,68 @@ cd demo/agent-runtime && PYTHONPATH=. .venv/bin/python3 demo_runner.py --rounds 
 # All projects
 cd demo/agent-runtime   && .venv/bin/python -m pytest tests/ -v   # 59 tests
 cd demo/mcp-tool-server && .venv/bin/python -m pytest tests/ -v   # 54 tests
+cd demo/langchain       && .venv/bin/python -m pytest tests/ -v   # 35 tests
 cd sdk                  && .venv/bin/python -m pytest tests/ -v   # 57 tests
-cd platform/collector   && .venv/bin/python -m pytest tests/ -v   # 49 tests, 97% coverage
+cd platform/collector   && .venv/bin/python -m pytest tests/ -v   # 129 tests, 97% coverage
 cd platform/analysis    && .venv/bin/python -m pytest tests/ -v   # 131 tests, 92% coverage
 ```
 
 ## Integration
 
-Companies integrate via the Python SDK:
+The SDK is framework-agnostic — it knows nothing about LangChain, LangGraph, or any specific agent framework. The entire public API is three things:
+
+1. **WorkflowOptimizer** — the client (creates traces, queries for guidance)
+2. **TraceContext** — wraps one workflow execution (async context manager)
+3. **StepContext** — wraps one tool call within a trace
+
+### Direct usage
 
 ```python
 from workflow_optimizer import WorkflowOptimizer
 
 optimizer = WorkflowOptimizer(endpoint="http://localhost:9000")
 
-# Get optimal path guidance at workflow start
 guidance = await optimizer.get_optimal_path("Handle refund for order ORD-789")
 # Returns: {"mode": "guided", "path": ["check_ticket", ...], "confidence": 0.87}
 # Or:      {"mode": "exploration"}  (not enough data yet)
 
-# Auto-capture every step
 async with optimizer.trace("Handle refund for order ORD-789") as trace:
     with trace.step("check_ticket", params={"id": "T-123"}):
         result = await check_ticket("T-123")
     with trace.step("process_refund", params={"order": "ORD-789"}):
         result = await process_refund("ORD-789", 99.99)
 ```
+
+### Framework bridges
+
+Each framework needs a thin bridge (~60 lines) that maps its tool-calling mechanism to `trace.step()`. Two patterns are included:
+
+**Transparent proxy** (agent-runtime) — wraps the tool client so the agent is completely unaware of tracing:
+
+```python
+class TracingMCPClient:
+    async def call_tool(self, tool_name, parameters):
+        with self._trace.step(tool_name, params=parameters) as step:
+            result = await self._inner.call_tool(tool_name, parameters)
+            step.set_response(result)
+            return result
+```
+
+**Callback handler** (LangChain/LangGraph) — hooks into LangChain's built-in callback system:
+
+```python
+class WorkflowOptimizerCallbackHandler(BaseCallbackHandler):
+    def on_tool_start(self, serialized, input_str, *, run_id, **kwargs):
+        step = self._trace.step(serialized["name"], params=parsed_input)
+        step.__enter__()
+
+    def on_tool_end(self, output, *, run_id, **kwargs):
+        step = self._active_steps.pop(run_id)
+        step.set_response(parsed_output)
+        step.__exit__(None, None, None)
+```
+
+The same pattern applies to any framework — CrewAI, AutoGen, OpenAI Agents SDK — find where tools are invoked and wrap with `trace.step()`.
 
 ## Tech Stack
 
@@ -159,7 +210,13 @@ The platform design is grounded in academic literature:
 
 ## Demo Scenario
 
-The demo simulates NovaTech Electronics, a company handling customer support tickets with an LLM-powered agent. Five ticket types exercise different tool combinations:
+The demo simulates NovaTech Electronics, a company handling customer support tickets with an LLM-powered agent. Three demo runners exercise the same scenarios through different frameworks:
+
+- **Agent Runtime** — custom async Python agent (5 scenarios per round)
+- **LangChain Single-Agent** — LangChain tool-calling loop (7 scenarios per round)
+- **LangChain Multi-Agent** — LangGraph supervisor + specialist graph (7 scenarios per round)
+
+The core five ticket types exercise different tool combinations:
 
 | Scenario | Ticket | Type | Expected Steps |
 |----------|--------|------|---------------|
@@ -168,6 +225,8 @@ The demo simulates NovaTech Electronics, a company handling customer support tic
 | Denied refund | T-1003 | refund_request | 6 |
 | VIP complaint | T-1004 | complaint | 6 |
 | Product troubleshooting | T-1005 | product_support | 4 |
+
+The LangChain demos add two additional error-handling scenarios (invalid ticket, system error) for 7 total per round.
 
 ## Limitations
 

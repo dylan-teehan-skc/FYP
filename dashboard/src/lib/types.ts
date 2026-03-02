@@ -225,5 +225,7 @@ export interface ActionResponse {
 export interface ActionStatusResponse {
   demo_running: boolean;
   analysis_running: boolean;
+  langchain_single_running: boolean;
+  langchain_multi_running: boolean;
   message: string;
 }
