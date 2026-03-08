@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDuration, formatCost } from "@/lib/format";
 import type { BottleneckTool } from "@/lib/types";
+
+const PAGE_SIZE = 10;
 
 interface CostLeakListProps {
   tools: BottleneckTool[];
@@ -21,6 +24,8 @@ function RedundancyBadge() {
 }
 
 export function CostLeakList({ tools }: CostLeakListProps) {
+  const [page, setPage] = useState(0);
+
   if (tools.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
@@ -31,10 +36,15 @@ export function CostLeakList({ tools }: CostLeakListProps) {
 
   const sorted = [...tools].sort((a, b) => b.total_cost_usd - a.total_cost_usd);
   const maxCost = sorted[0]?.total_cost_usd ?? 1;
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const canPrev = page > 0;
+  const canNext = page < totalPages - 1;
+  const pagedTools = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   return (
     <div className="space-y-2">
-      {sorted.map((tool, idx) => {
+      {pagedTools.map((tool, idx) => {
+        const globalIdx = page * PAGE_SIZE + idx;
         const isRedundant = tool.avg_calls_per_workflow > 2;
         const barPct = maxCost > 0 ? (tool.total_cost_usd / maxCost) * 100 : 0;
 
@@ -43,7 +53,7 @@ export function CostLeakList({ tools }: CostLeakListProps) {
             <CardContent className="p-4">
               <div className="mb-2 flex items-center gap-2">
                 <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                  #{idx + 1}
+                  #{globalIdx + 1}
                 </span>
                 <span className="flex-1 truncate text-sm font-medium text-foreground">
                   {tool.tool_name}
@@ -102,6 +112,30 @@ export function CostLeakList({ tools }: CostLeakListProps) {
           </Card>
         );
       })}
+
+      {totalPages > 1 && (
+        <div className="mt-1 flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">
+            Page {page + 1} of {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => p - 1)}
+              disabled={!canPrev}
+              className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/50 disabled:pointer-events-none disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setPage((p) => p + 1)}
+              disabled={!canNext}
+              className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/50 disabled:pointer-events-none disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

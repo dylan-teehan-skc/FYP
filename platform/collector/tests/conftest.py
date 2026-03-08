@@ -10,6 +10,7 @@ from httpx import ASGITransport, AsyncClient
 
 from collector.app import create_app
 from collector.config import Settings
+from collector.websocket import ConnectionManager
 
 
 class MockDatabase:
@@ -62,6 +63,7 @@ class MockDatabase:
             "pct_duration_improvement": 0.0,
             "pct_steps_improvement": 0.0,
             "pct_success_improvement": 0.0,
+            "guided_count": 0,
         })
         self.list_task_clusters = AsyncMock(return_value=[])
         self.get_cluster_workflows = AsyncMock(return_value={
@@ -79,6 +81,7 @@ class MockDatabase:
             return_value={"nodes": [], "edges": []}
         )
         self.get_group_bottlenecks = AsyncMock(return_value=[])
+        self.list_active_workflows = AsyncMock(return_value={"workflows": [], "total": 0})
 
     async def _insert_event(self, event: dict[str, Any]) -> None:
         self.events.append(event)
@@ -115,6 +118,7 @@ def app(mock_db: MockDatabase, mock_embedding_service: MockEmbeddingService):
     test_app.state.settings = settings
     test_app.state.db = mock_db
     test_app.state.embedding_service = mock_embedding_service
+    test_app.state.ws_manager = ConnectionManager()
     return test_app
 
 

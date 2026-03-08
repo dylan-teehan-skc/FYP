@@ -8,6 +8,7 @@ import {
   ListTree,
   Boxes,
   ArrowLeftRight,
+  MessageSquare,
   Lightbulb,
   Settings,
 } from "lucide-react";
@@ -16,10 +17,11 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/graph", label: "Execution Graph", icon: GitGraph },
-  { href: "/traces", label: "Traces", icon: ListTree },
   { href: "/clusters", label: "Clusters", icon: Boxes },
+  { href: "/traces", label: "Traces", icon: ListTree },
   { href: "/compare", label: "Compare", icon: ArrowLeftRight },
   { href: "/insights", label: "Insights", icon: Lightbulb },
+  { href: "/agents", label: "Agent Chat", icon: MessageSquare },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -31,7 +33,7 @@ export function Sidebar() {
       <div className="flex h-14 items-center gap-2 border-b border-border px-4">
         <div className="h-2 w-2 rounded-full bg-emerald-500" />
         <span className="text-sm font-semibold tracking-tight">
-          Workflow Optimizer
+          FlowGuide
         </span>
       </div>
       <nav className="flex-1 space-y-0.5 p-2">

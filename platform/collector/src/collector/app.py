@@ -13,7 +13,8 @@ from collector.config import Settings, get_settings
 from collector.database import Database
 from collector.embeddings import EmbeddingService
 from collector.logger import get_logger, init_logging
-from collector.routes import actions, analytics, dashboard, events, optimize, workflows
+from collector.routes import actions, analytics, dashboard, events, optimize, workflows, ws
+from collector.websocket import ConnectionManager
 
 
 @asynccontextmanager
@@ -30,6 +31,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.settings = settings
     app.state.db = db
     app.state.embedding_service = embedding_service
+    app.state.ws_manager = ConnectionManager()
     yield
     await db.disconnect()
 
@@ -58,6 +60,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(analytics.router)
     app.include_router(dashboard.router)
     app.include_router(actions.router)
+    app.include_router(ws.router)
     return app
 
 

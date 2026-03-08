@@ -8,11 +8,13 @@ from workflow_optimizer.models import OptimalPathResponse
 from demo_runner import (
     SCENARIOS,
     LastDecision,
+    Scenario,
     ScenarioResult,
     TracingMCPClient,
     TracingReasoningEngine,
     build_guided_context,
     parse_args,
+    verify_outcome,
 )
 
 # ---------------------------------------------------------------------------
@@ -267,3 +269,116 @@ class TestScenarioResult:
         assert result.success is True
         assert result.total_prompt_tokens == 0
         assert result.total_completion_tokens == 0
+
+
+# ---------------------------------------------------------------------------
+# verify_outcome
+# ---------------------------------------------------------------------------
+
+_REFUND_SCENARIO = Scenario(
+    ticket_id="T-1001",
+    order_id="ORD-5001",
+    customer_id="C-101",
+    workflow_type="refund_request",
+    task_description="Refund for ORD-5001",
+    expected_steps=6,
+)
+
+_COMPLAINT_SCENARIO = Scenario(
+    ticket_id="T-1004",
+    order_id="ORD-5004",
+    customer_id="C-104",
+    workflow_type="complaint",
+    task_description="Complaint about ORD-5004",
+    expected_steps=6,
+)
+
+
+class TestVerifyOutcome:
+    @pytest.mark.asyncio
+    async def test_ticket_closed_returns_success(self) -> None:
+        mcp = AsyncMock()
+        mcp.call_tool = AsyncMock(return_value={
+            "success": True,
+            "result": {"status": "closed"},
+        })
+        ok, reason = await verify_outcome(_COMPLAINT_SCENARIO, mcp)
+        assert ok is True
+        assert "closed" in reason
+
+    @pytest.mark.asyncio
+    async def test_ticket_escalated_returns_success(self) -> None:
+        mcp = AsyncMock()
+        mcp.call_tool = AsyncMock(return_value={
+            "success": True,
+            "result": {"status": "escalated"},
+        })
+        ok, reason = await verify_outcome(_COMPLAINT_SCENARIO, mcp)
+        assert ok is True
+        assert "escalated" in reason
+
+    @pytest.mark.asyncio
+    async def test_ticket_open_returns_failure(self) -> None:
+        mcp = AsyncMock()
+        mcp.call_tool = AsyncMock(return_value={
+            "success": True,
+            "result": {"status": "open"},
+        })
+        ok, reason = await verify_outcome(_COMPLAINT_SCENARIO, mcp)
+        assert ok is False
+        assert "open" in reason
+
+    @pytest.mark.asyncio
+    async def test_refund_processed_and_ticket_closed(self) -> None:
+        mcp = AsyncMock()
+        mcp.call_tool = AsyncMock(side_effect=[
+            {"success": True, "result": {"status": "closed"}},
+            {"success": True, "result": {"refund_status": "refunded"}},
+        ])
+        ok, reason = await verify_outcome(_REFUND_SCENARIO, mcp)
+        assert ok is True
+        assert "Refund processed" in reason
+
+    @pytest.mark.asyncio
+    async def test_refund_processed_ticket_still_open(self) -> None:
+        mcp = AsyncMock()
+        mcp.call_tool = AsyncMock(side_effect=[
+            {"success": True, "result": {"status": "open"}},
+            {"success": True, "result": {"refund_status": "refunded"}},
+        ])
+        ok, reason = await verify_outcome(_REFUND_SCENARIO, mcp)
+        assert ok is True
+        assert "ticket still open" in reason
+
+    @pytest.mark.asyncio
+    async def test_refund_not_processed(self) -> None:
+        mcp = AsyncMock()
+        mcp.call_tool = AsyncMock(side_effect=[
+            {"success": True, "result": {"status": "open"}},
+            {"success": True, "result": {}},
+        ])
+        ok, reason = await verify_outcome(_REFUND_SCENARIO, mcp)
+        assert ok is False
+        assert "not processed" in reason
+
+    @pytest.mark.asyncio
+    async def test_ticket_check_fails(self) -> None:
+        mcp = AsyncMock()
+        mcp.call_tool = AsyncMock(return_value={
+            "success": False,
+            "error": "connection refused",
+        })
+        ok, reason = await verify_outcome(_COMPLAINT_SCENARIO, mcp)
+        assert ok is False
+        assert "Could not verify" in reason
+
+    @pytest.mark.asyncio
+    async def test_order_check_fails_for_refund(self) -> None:
+        mcp = AsyncMock()
+        mcp.call_tool = AsyncMock(side_effect=[
+            {"success": True, "result": {"status": "closed"}},
+            {"success": False, "error": "order not found"},
+        ])
+        ok, reason = await verify_outcome(_REFUND_SCENARIO, mcp)
+        assert ok is False
+        assert "Could not verify order" in reason

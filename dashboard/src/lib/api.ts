@@ -45,6 +45,9 @@ export const api = {
   getWorkflows: (limit = 50, offset = 0) =>
     fetchApi<WorkflowListResponse>(`/workflows?limit=${limit}&offset=${offset}`),
 
+  getActiveWorkflows: () =>
+    fetchApi<WorkflowListResponse>("/workflows/active"),
+
   getWorkflowTrace: (workflowId: string) =>
     fetchApi<TraceOut>(`/workflows/${workflowId}/trace`),
 

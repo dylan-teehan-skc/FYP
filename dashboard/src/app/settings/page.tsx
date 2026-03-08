@@ -64,7 +64,7 @@ const DEMO_BUTTONS: DemoButton[] = [
   {
     type: "demo",
     label: "Agent Runtime",
-    scenariosPerRound: 5,
+    scenariosPerRound: 15,
     run: (r) => api.runDemo(r),
     statusKey: "demo_running",
   },
@@ -185,17 +185,25 @@ export default function SettingsPage() {
                     stopPolling();
                     setDemoRunning(false);
                     setActiveDemo(null);
-                    setDemoMsg(
-                      `Done — ${fresh.total_workflows} workflows`,
-                    );
-                    if (st.analysis_running) {
-                      setAnalysisRunning(true);
-                      setAnalysisMsg("Running...");
+                    if (st.last_error) {
+                      setDemoMsg(`Error: ${st.last_error}`);
+                    } else {
+                      setDemoMsg(
+                        `Done — ${fresh.total_workflows} workflows`,
+                      );
+                      if (st.analysis_running) {
+                        setAnalysisRunning(true);
+                        setAnalysisMsg("Running...");
+                      }
                     }
                   }
                   if (!st.analysis_running && analysisRunning) {
                     setAnalysisRunning(false);
-                    setAnalysisMsg("Complete");
+                    if (st.last_error) {
+                      setAnalysisMsg(`Error: ${st.last_error}`);
+                    } else {
+                      setAnalysisMsg("Complete");
+                    }
                   }
                 } catch {
                   stopPolling();
@@ -231,7 +239,11 @@ export default function SettingsPage() {
           if (!status.analysis_running) {
             clearInterval(poll);
             setAnalysisRunning(false);
-            setAnalysisMsg("Complete");
+            if (status.last_error) {
+              setAnalysisMsg(`Error: ${status.last_error}`);
+            } else {
+              setAnalysisMsg("Complete");
+            }
             api.getAnalyticsSummary().then(setSummary).catch(() => {});
           }
         } catch {
@@ -282,12 +294,15 @@ export default function SettingsPage() {
             setDemoRunning(false);
             const finalCount =
               s.total_workflows - startWorkflowsRef.current;
-            setDemoMsg(
-              `Done — ${finalCount} scenarios completed. Running analysis...`,
-            );
-            setDemoProgress(total);
+            if (status.last_error) {
+              setDemoMsg(`Error: ${status.last_error}`);
+            } else {
+              setDemoMsg(
+                `Done — ${finalCount} scenarios completed`,
+              );
+            }
+            setDemoProgress(finalCount > 0 ? total : 0);
             setActiveDemo(null);
-            handleRunAnalysis();
           }
         } catch {
           stopPolling();
@@ -480,8 +495,9 @@ export default function SettingsPage() {
               )}
 
               {/* Demo progress */}
-              {(demoRunning || (demoMsg && demoProgress > 0)) && (
+              {(demoRunning || demoMsg) && (
                 <div className="mt-3 space-y-1.5">
+                  {(demoRunning || demoProgress > 0) && (
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                     <div
                       className="h-full rounded-full bg-emerald-500 transition-all duration-500"
@@ -490,9 +506,12 @@ export default function SettingsPage() {
                       }}
                     />
                   </div>
+                  )}
                   <p className="text-xs tabular-nums text-muted-foreground">
                     {demoMsg && demoMsg.startsWith("Done") ? (
                       <span className="text-emerald-400">{demoMsg}</span>
+                    ) : demoMsg && demoMsg.startsWith("Error") ? (
+                      <span className="text-red-400">{demoMsg}</span>
                     ) : (
                       demoMsg
                     )}

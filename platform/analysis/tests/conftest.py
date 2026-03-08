@@ -19,7 +19,12 @@ class MockAnalysisDatabase:
         self.fetch_workflow_events = AsyncMock(return_value=[])
         self.fetch_all_embeddings = AsyncMock(return_value=[])
         self.fetch_embedding_for_workflow = AsyncMock(return_value=[0.1] * 768)
+        self.fetch_centroid_embedding = AsyncMock(return_value=[0.1] * 768)
+        self.fetch_mode_success_rates = AsyncMock(
+            return_value={"guided": None, "exploration": None}
+        )
         self.upsert_optimal_path = AsyncMock()
+        self.clear_optimal_paths = AsyncMock()
         self.connect = AsyncMock()
         self.disconnect = AsyncMock()
 

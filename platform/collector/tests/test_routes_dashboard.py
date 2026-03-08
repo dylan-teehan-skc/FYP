@@ -262,6 +262,7 @@ class TestSavings:
             "pct_duration_improvement": 40.0,
             "pct_steps_improvement": 33.3,
             "pct_success_improvement": 75.0,
+            "guided_count": 12,
         })
         response = await client.get("/analytics/savings")
         assert response.status_code == 200
@@ -410,6 +411,10 @@ class TestClusterGroupDetail:
             "mode_stats": _mode_stats_dict(),
             "avg_conformance": 0.85,
         })
+        mock_db.get_group_distinct_paths = AsyncMock(return_value=[
+            {"tool_sequence": ["check_ticket", "process_refund"], "workflow_count": 10},
+            {"tool_sequence": ["check_ticket", "escalate"], "workflow_count": 3},
+        ])
         response = await client.get("/task-clusters/group/Refund%20Processing/detail")
         assert response.status_code == 200
         data = response.json()
@@ -418,6 +423,8 @@ class TestClusterGroupDetail:
         assert data["avg_conformance"] == 0.85
         assert data["mode_stats"]["guided"]["count"] == 3
         assert data["optimal_sequence"] == ["check_ticket", "process_refund"]
+        assert len(data["distinct_paths"]) == 2
+        assert data["distinct_paths"][0]["workflow_count"] == 10
 
 
 class TestClusterGroupExecutionGraph:

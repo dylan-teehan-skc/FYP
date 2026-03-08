@@ -42,6 +42,8 @@ class TestOptimizePath:
             "success_rate": 0.95,
             "execution_count": 15,
             "similarity": 0.95,
+            "guided_success_rate": None,
+            "exploration_success_rate": None,
         })
         response = await client.post(
             "/optimize/path", json={"task_description": "Handle refund for ORD-789"}
@@ -64,12 +66,74 @@ class TestOptimizePath:
             "success_rate": 0.80,
             "execution_count": 5,
             "similarity": 0.45,
+            "guided_success_rate": None,
+            "exploration_success_rate": None,
         })
         response = await client.post(
             "/optimize/path", json={"task_description": "Unknown task"}
         )
         assert response.status_code == 200
         assert response.json()["mode"] == "exploration"
+
+    async def test_exploration_when_guided_regresses(
+        self, client: AsyncClient, mock_db: MockDatabase,
+    ) -> None:
+        """Fall back to exploration when guided rate drops below exploration."""
+        mock_db.find_similar_paths = AsyncMock(return_value={
+            "tool_sequence": ["check_ticket", "get_order"],
+            "avg_duration_ms": 2000.0,
+            "avg_steps": 5.0,
+            "success_rate": 0.90,
+            "execution_count": 30,
+            "similarity": 0.95,
+            "guided_success_rate": 0.60,
+            "exploration_success_rate": 0.90,
+        })
+        response = await client.post(
+            "/optimize/path", json={"task_description": "Handle refund"}
+        )
+        assert response.status_code == 200
+        assert response.json()["mode"] == "exploration"
+
+    async def test_guided_when_no_regression_data(
+        self, client: AsyncClient, mock_db: MockDatabase,
+    ) -> None:
+        """Return guided when regression rates are null (no data yet)."""
+        mock_db.find_similar_paths = AsyncMock(return_value={
+            "tool_sequence": ["check_ticket", "get_order"],
+            "avg_duration_ms": 2000.0,
+            "avg_steps": 5.0,
+            "success_rate": 0.90,
+            "execution_count": 30,
+            "similarity": 0.95,
+            "guided_success_rate": None,
+            "exploration_success_rate": None,
+        })
+        response = await client.post(
+            "/optimize/path", json={"task_description": "Handle refund"}
+        )
+        assert response.status_code == 200
+        assert response.json()["mode"] == "guided"
+
+    async def test_guided_when_rates_within_margin(
+        self, client: AsyncClient, mock_db: MockDatabase,
+    ) -> None:
+        """Return guided when guided rate is within margin of exploration."""
+        mock_db.find_similar_paths = AsyncMock(return_value={
+            "tool_sequence": ["check_ticket", "get_order"],
+            "avg_duration_ms": 2000.0,
+            "avg_steps": 5.0,
+            "success_rate": 0.90,
+            "execution_count": 30,
+            "similarity": 0.95,
+            "guided_success_rate": 0.85,
+            "exploration_success_rate": 0.90,
+        })
+        response = await client.post(
+            "/optimize/path", json={"task_description": "Handle refund"}
+        )
+        assert response.status_code == 200
+        assert response.json()["mode"] == "guided"
 
     async def test_missing_task_description(self, client: AsyncClient) -> None:
         response = await client.post("/optimize/path", json={})

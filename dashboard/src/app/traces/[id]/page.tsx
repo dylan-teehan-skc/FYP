@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Clock, Hash, Activity, DollarSign } from "lucide-react";
+import { ArrowLeft, Clock, Hash, Activity, DollarSign, MessageSquare } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -185,6 +185,13 @@ export default function TraceDetailPage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <Link
+                href={`/agents/${workflowId}`}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              >
+                <MessageSquare className="h-3 w-3" />
+                View Chat
+              </Link>
               <StatusBadge status={overallStatus} />
               <ModeBadge mode={mode} />
             </div>

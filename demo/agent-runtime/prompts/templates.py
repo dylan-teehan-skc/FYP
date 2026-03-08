@@ -22,11 +22,13 @@ class AgentPrompts:
             return "No previous actions."
 
         lines = []
-        for i, h in enumerate(history[-10:], 1):
+        for i, h in enumerate(history[-15:], 1):
             action = h.get("action", "unknown")
             status = "SUCCESS" if h.get("success", False) else "FAILED"
-            result = h.get("result", "")
-            lines.append(f"{i}. [{status}] {action}: {result}")
+            params = h.get("parameters", {})
+            params_str = ", ".join(f"{k}={v}" for k, v in params.items())
+            result = str(h.get("result", ""))
+            lines.append(f"{i}. [{status}] {action}({params_str}): {result}")
         return "\n".join(lines)
 
     @classmethod

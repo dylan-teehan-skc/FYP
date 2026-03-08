@@ -129,6 +129,8 @@ export default function ComparePage() {
   const guidedCost = guided?.avg_cost_usd != null
     ? parseFloat((guided.avg_cost_usd * 100).toFixed(2)) : 0;
 
+  const guidedHasData = (guided?.count ?? 0) > 0;
+
   const explorationStats = exp
     ? [
         { label: "Avg Duration", value: formatDuration(exp.avg_duration_ms) },
@@ -140,16 +142,24 @@ export default function ComparePage() {
     : [];
 
   const guidedStats = guided
-    ? [
-        {
-          label: "Avg Duration",
-          value: formatDuration(guided.avg_duration_ms),
-        },
-        { label: "Avg Steps", value: formatNumber(guided.avg_steps) },
-        { label: "Success Rate", value: formatPercent(guided.success_rate) },
-        { label: "Avg Cost", value: formatCost(guided.avg_cost_usd ?? null) },
-        { label: "Workflows", value: formatNumber(guided.count) },
-      ]
+    ? guidedHasData
+      ? [
+          {
+            label: "Avg Duration",
+            value: formatDuration(guided.avg_duration_ms),
+          },
+          { label: "Avg Steps", value: formatNumber(guided.avg_steps) },
+          { label: "Success Rate", value: formatPercent(guided.success_rate) },
+          { label: "Avg Cost", value: formatCost(guided.avg_cost_usd ?? null) },
+          { label: "Workflows", value: formatNumber(guided.count) },
+        ]
+      : [
+          { label: "Avg Duration", value: "-" },
+          { label: "Avg Steps", value: "-" },
+          { label: "Success Rate", value: "-" },
+          { label: "Avg Cost", value: "-" },
+          { label: "Workflows", value: "0" },
+        ]
     : [];
 
   return (
@@ -194,6 +204,7 @@ export default function ComparePage() {
               after={guidedDurS}
               unit="s"
               lowerIsBetter={true}
+              hasData={guidedHasData}
             />
             <DeltaCard
               label="Avg Steps"
@@ -201,6 +212,7 @@ export default function ComparePage() {
               after={guidedSteps}
               unit="steps"
               lowerIsBetter={true}
+              hasData={guidedHasData}
             />
             <DeltaCard
               label="Success Rate"
@@ -208,6 +220,7 @@ export default function ComparePage() {
               after={guidedSucc}
               unit="%"
               lowerIsBetter={false}
+              hasData={guidedHasData}
             />
             <DeltaCard
               label="Avg Cost"
@@ -215,6 +228,7 @@ export default function ComparePage() {
               after={guidedCost}
               unit="¢"
               lowerIsBetter={true}
+              hasData={guidedHasData}
             />
             <DeltaCard
               label="API Calls"
@@ -222,6 +236,7 @@ export default function ComparePage() {
               after={guidedSteps}
               unit="calls"
               lowerIsBetter={true}
+              hasData={guidedHasData}
             />
           </>
         )}

@@ -11,7 +11,7 @@ import {
   type SortingState,
   flexRender,
 } from "@tanstack/react-table";
-import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, ListTree } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -100,10 +100,13 @@ function SkeletonRows() {
   );
 }
 
+const PAGE_SIZE = 25;
+
 export default function TracesPage() {
   const router = useRouter();
   const [workflows, setWorkflows] = useState<WorkflowListItem[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sorting, setSorting] = useState<SortingState>([
@@ -111,8 +114,9 @@ export default function TracesPage() {
   ]);
 
   useEffect(() => {
+    setLoading(true);
     api
-      .getWorkflows(50, 0)
+      .getWorkflows(PAGE_SIZE, page * PAGE_SIZE)
       .then((res) => {
         setWorkflows(res.workflows);
         setTotal(res.total);
@@ -123,7 +127,11 @@ export default function TracesPage() {
         );
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [page]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const canPrev = page > 0;
+  const canNext = page < totalPages - 1;
 
   const columns = useMemo<ColumnDef<WorkflowListItem>[]>(
     () => [
@@ -220,10 +228,13 @@ export default function TracesPage() {
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">
-            Workflow Traces{" "}
-            <InfoTooltip text="Every workflow execution captured by the SDK. Each row is one agent run — click to see the full step-by-step trace, Gantt timeline, and conformance against the optimal path." />
-          </h1>
+          <div className="flex items-center gap-2">
+            <ListTree className="h-5 w-5 text-muted-foreground" />
+            <h1 className="text-lg font-semibold tracking-tight">
+              Workflow Traces{" "}
+              <InfoTooltip text="Every workflow execution captured by the SDK. Each row is one agent run — click to see the full step-by-step trace, Gantt timeline, and conformance against the optimal path." />
+            </h1>
+          </div>
           <p className="text-sm text-muted-foreground">
             {loading
               ? "Loading..."
@@ -301,10 +312,28 @@ export default function TracesPage() {
         </CardContent>
       </Card>
 
-      {!loading && !error && total > workflows.length && (
-        <p className="mt-3 text-xs text-muted-foreground text-center">
-          Showing {workflows.length} of {total} workflows
-        </p>
+      {!loading && !error && totalPages > 1 && (
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">
+            Page {page + 1} of {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => p - 1)}
+              disabled={!canPrev}
+              className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/50 disabled:pointer-events-none disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setPage((p) => p + 1)}
+              disabled={!canNext}
+              className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/50 disabled:pointer-events-none disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

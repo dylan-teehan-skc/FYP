@@ -15,7 +15,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Workflow Optimizer",
+  title: "FlowGuide",
   description: "Self-optimizing workflow intelligence dashboard",
 };
 

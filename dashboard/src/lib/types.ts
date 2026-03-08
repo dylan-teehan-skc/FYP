@@ -42,6 +42,7 @@ export interface EventOut {
   llm_prompt_tokens: number;
   llm_completion_tokens: number;
   llm_reasoning: string;
+  llm_prompt: string;
   duration_ms: number;
   cost_usd: number;
   status: string;
@@ -139,6 +140,7 @@ export interface SavingsResponse {
   pct_duration_improvement: number;
   pct_steps_improvement: number;
   pct_success_improvement: number;
+  guided_count: number;
 }
 
 // === Task Cluster types ===
@@ -201,6 +203,11 @@ export interface ClusterDetailResponse {
   avg_conformance: number | null;
 }
 
+export interface DistinctPath {
+  tool_sequence: string[];
+  workflow_count: number;
+}
+
 export interface ClusterGroupDetailResponse {
   name: string;
   subclusters: TaskClusterSummary[];
@@ -212,6 +219,7 @@ export interface ClusterGroupDetailResponse {
   mode_stats: ClusterModeStats;
   avg_conformance: number | null;
   optimal_sequence: string[];
+  distinct_paths: DistinctPath[];
 }
 
 // === Action types ===
@@ -228,4 +236,5 @@ export interface ActionStatusResponse {
   langchain_single_running: boolean;
   langchain_multi_running: boolean;
   message: string;
+  last_error: string;
 }

@@ -80,11 +80,11 @@ class Database:
                 event_id, workflow_id, timestamp, activity,
                 agent_name, agent_role, tool_name, tool_parameters, tool_response,
                 llm_model, llm_prompt_tokens, llm_completion_tokens, llm_reasoning,
-                duration_ms, cost_usd, status, error_message,
+                llm_prompt, duration_ms, cost_usd, status, error_message,
                 step_number, parent_event_id
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9,
-                $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+                $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
             )""",
             *_event_to_args(event),
         )
@@ -100,11 +100,11 @@ class Database:
                     event_id, workflow_id, timestamp, activity,
                     agent_name, agent_role, tool_name, tool_parameters, tool_response,
                     llm_model, llm_prompt_tokens, llm_completion_tokens, llm_reasoning,
-                    duration_ms, cost_usd, status, error_message,
+                    llm_prompt, duration_ms, cost_usd, status, error_message,
                     step_number, parent_event_id
                 ) VALUES (
                     $1, $2, $3, $4, $5, $6, $7, $8, $9,
-                    $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+                    $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
                 )""",
                 [_event_to_args(e) for e in events],
             )
@@ -116,7 +116,7 @@ class Database:
                 event_id::text, workflow_id::text, timestamp, activity,
                 agent_name, agent_role, tool_name, tool_parameters, tool_response,
                 llm_model, llm_prompt_tokens, llm_completion_tokens, llm_reasoning,
-                duration_ms, cost_usd, status, error_message,
+                llm_prompt, duration_ms, cost_usd, status, error_message,
                 step_number, parent_event_id::text
             FROM event_logs
             WHERE workflow_id = $1
@@ -158,7 +158,7 @@ class Database:
     async def find_similar_paths(
         self,
         embedding: list[float],
-        min_executions: int = 30,
+        min_executions: int = 5,
         min_success_rate: float = 0.85,
     ) -> asyncpg.Record | None:
         """Semantic search for optimal path using pgvector cosine similarity."""
@@ -166,6 +166,7 @@ class Database:
             """SELECT
                 tool_sequence, avg_duration_ms, avg_steps,
                 success_rate, execution_count,
+                guided_success_rate, exploration_success_rate,
                 1 - (embedding <=> $1::vector) AS similarity
             FROM optimal_paths
             WHERE execution_count >= $2
@@ -184,10 +185,10 @@ class Database:
             """SELECT
                 COUNT(DISTINCT workflow_id) AS total_workflows,
                 COUNT(*) AS total_events,
-                AVG(duration_ms)
-                    FILTER (WHERE activity = 'workflow:complete') AS avg_duration_ms,
-                AVG(step_number)
-                    FILTER (WHERE activity = 'workflow:complete') AS avg_steps,
+                AVG(duration_ms) FILTER (WHERE activity
+                    IN ('workflow:complete', 'workflow:fail')) AS avg_duration_ms,
+                AVG(step_number) FILTER (WHERE activity
+                    IN ('workflow:complete', 'workflow:fail')) AS avg_steps,
                 AVG(CASE WHEN status = 'success' THEN 1.0 ELSE 0.0 END)
                     FILTER (WHERE activity LIKE 'workflow:%%') AS success_rate
             FROM event_logs
@@ -243,7 +244,7 @@ class Database:
                 ) AS is_guided
             FROM event_logs el
             LEFT JOIN workflow_embeddings we ON we.workflow_id = el.workflow_id
-            WHERE el.activity = 'workflow:complete'
+            WHERE el.activity IN ('workflow:complete', 'workflow:fail')
             ORDER BY el.timestamp DESC
             LIMIT $1 OFFSET $2
             """,
@@ -251,11 +252,44 @@ class Database:
             offset,
         )
         total_row = await self.fetchrow(
-            "SELECT COUNT(*) AS cnt FROM event_logs WHERE activity = 'workflow:complete'"
+            "SELECT COUNT(*) AS cnt FROM event_logs"
+            " WHERE activity IN ('workflow:complete', 'workflow:fail')"
         )
         return {
             "workflows": [dict(r) for r in rows],
             "total": total_row["cnt"] if total_row else 0,
+        }
+
+    async def list_active_workflows(self) -> dict[str, Any]:
+        """List workflows that have started but not completed or failed."""
+        rows = await self.fetch(
+            """SELECT
+                el.workflow_id::text,
+                we.task_description,
+                'in_progress' AS status,
+                NULL AS duration_ms,
+                MAX(el.step_number) AS steps,
+                MIN(el.timestamp) AS timestamp,
+                EXISTS(
+                    SELECT 1 FROM event_logs m
+                    WHERE m.workflow_id = el.workflow_id
+                      AND m.activity = 'optimize:guided'
+                ) AS is_guided
+            FROM event_logs el
+            LEFT JOIN workflow_embeddings we ON we.workflow_id = el.workflow_id
+            WHERE el.workflow_id IN (
+                SELECT workflow_id FROM event_logs WHERE activity = 'workflow:start'
+                EXCEPT
+                SELECT workflow_id FROM event_logs
+                WHERE activity IN ('workflow:complete', 'workflow:fail')
+            )
+            GROUP BY el.workflow_id, we.task_description
+            ORDER BY timestamp DESC
+            """
+        )
+        return {
+            "workflows": [dict(r) for r in rows],
+            "total": len(rows),
         }
 
     async def list_optimal_paths(self) -> list[asyncpg.Record]:
@@ -290,7 +324,7 @@ class Database:
                 COUNT(*) FILTER (WHERE mm.is_guided = 1) AS guided
             FROM event_logs el
             LEFT JOIN mode_map mm ON mm.workflow_id = el.workflow_id
-            WHERE el.activity = 'workflow:complete'
+            WHERE el.activity IN ('workflow:complete', 'workflow:fail')
             """
         )
         if row is None:
@@ -361,7 +395,7 @@ class Database:
                 ON mm.workflow_id = el.workflow_id
             LEFT JOIN cost_map cm
                 ON cm.workflow_id = el.workflow_id
-            WHERE el.activity = 'workflow:complete'
+            WHERE el.activity IN ('workflow:complete', 'workflow:fail')
             """
         )
 
@@ -412,7 +446,7 @@ class Database:
                 AVG(COALESCE(mm.is_guided, 0)::float) AS guided_pct
             FROM event_logs el
             LEFT JOIN mode_map mm ON mm.workflow_id = el.workflow_id
-            WHERE el.activity = 'workflow:complete'
+            WHERE el.activity IN ('workflow:complete', 'workflow:fail')
             GROUP BY DATE_TRUNC('day', el.timestamp)::date
             ORDER BY date
             """
@@ -685,7 +719,7 @@ class Database:
                 cm.total_cost_usd
             FROM matched_workflows mw
             JOIN event_logs el ON el.workflow_id = mw.workflow_id
-                AND el.activity = 'workflow:complete'
+                AND el.activity IN ('workflow:complete', 'workflow:fail')
             LEFT JOIN mode_map mm ON mm.workflow_id = mw.workflow_id
             LEFT JOIN cost_map cm ON cm.workflow_id = mw.workflow_id
             ORDER BY el.timestamp DESC
@@ -734,7 +768,7 @@ class Database:
                     FILTER (WHERE mm.is_guided = 1) AS gui_avg_cost
             FROM matched_workflows mw
             JOIN event_logs el ON el.workflow_id = mw.workflow_id
-                AND el.activity = 'workflow:complete'
+                AND el.activity IN ('workflow:complete', 'workflow:fail')
             LEFT JOIN mode_map mm ON mm.workflow_id = mw.workflow_id
             LEFT JOIN cost_map cm ON cm.workflow_id = mw.workflow_id
             """,
@@ -853,7 +887,7 @@ class Database:
                 cm.total_cost_usd
             FROM matched_workflows mw
             JOIN event_logs el ON el.workflow_id = mw.workflow_id
-                AND el.activity = 'workflow:complete'
+                AND el.activity IN ('workflow:complete', 'workflow:fail')
             LEFT JOIN mode_map mm ON mm.workflow_id = mw.workflow_id
             LEFT JOIN cost_map cm ON cm.workflow_id = mw.workflow_id
             ORDER BY el.timestamp DESC
@@ -909,7 +943,7 @@ class Database:
                     FILTER (WHERE mm.is_guided = 1) AS gui_avg_cost
             FROM matched_workflows mw
             JOIN event_logs el ON el.workflow_id = mw.workflow_id
-                AND el.activity = 'workflow:complete'
+                AND el.activity IN ('workflow:complete', 'workflow:fail')
             LEFT JOIN mode_map mm ON mm.workflow_id = mw.workflow_id
             LEFT JOIN cost_map cm ON cm.workflow_id = mw.workflow_id
             """,
@@ -975,6 +1009,44 @@ class Database:
             "mode_stats": dict(mode_stats_row) if mode_stats_row else None,
             "avg_conformance": avg_conformance,
         }
+
+    async def get_group_distinct_paths(
+        self,
+        path_ids: list[str],
+        similarity_threshold: float,
+    ) -> list[dict[str, Any]]:
+        """Get all distinct tool sequences for workflows in a cluster group."""
+        if not path_ids:
+            return []
+
+        uuid_ids = [UUID(pid) for pid in path_ids]
+
+        rows = await self.fetch(
+            """WITH cluster_wfs AS (
+                SELECT DISTINCT we.workflow_id
+                FROM workflow_embeddings we, optimal_paths op
+                WHERE op.path_id = ANY($1)
+                  AND op.embedding IS NOT NULL
+                  AND we.embedding IS NOT NULL
+                  AND 1 - (we.embedding <=> op.embedding) >= $2
+            ),
+            wf_tools AS (
+                SELECT e.workflow_id,
+                       array_agg(e.tool_name ORDER BY e.timestamp) AS tool_seq
+                FROM event_logs e
+                WHERE e.activity LIKE 'tool_call:%%'
+                  AND e.workflow_id IN (SELECT workflow_id FROM cluster_wfs)
+                GROUP BY e.workflow_id
+            )
+            SELECT tool_seq, COUNT(*) AS workflow_count
+            FROM wf_tools
+            GROUP BY tool_seq
+            ORDER BY workflow_count DESC
+            """,
+            uuid_ids,
+            similarity_threshold,
+        )
+        return [{"tool_sequence": list(r["tool_seq"]), "workflow_count": r["workflow_count"]} for r in rows]
 
     async def get_group_execution_graph(
         self,
@@ -1117,12 +1189,12 @@ class Database:
                 SELECT
                     el.workflow_id,
                     COALESCE(mm.is_guided, 0) AS is_guided,
-                    MAX(el.duration_ms)
-                        FILTER (WHERE el.activity = 'workflow:complete') AS duration_ms,
-                    MAX(el.step_number)
-                        FILTER (WHERE el.activity = 'workflow:complete') AS steps,
-                    MAX(el.status)
-                        FILTER (WHERE el.activity = 'workflow:complete') AS status,
+                    MAX(el.duration_ms) FILTER (WHERE el.activity
+                        IN ('workflow:complete', 'workflow:fail')) AS duration_ms,
+                    MAX(el.step_number) FILTER (WHERE el.activity
+                        IN ('workflow:complete', 'workflow:fail')) AS steps,
+                    MAX(el.status) FILTER (WHERE el.activity
+                        IN ('workflow:complete', 'workflow:fail')) AS status,
                     SUM(el.cost_usd) AS total_cost_usd
                 FROM event_logs el
                 LEFT JOIN mode_map mm ON mm.workflow_id = el.workflow_id
@@ -1180,6 +1252,7 @@ class Database:
             "pct_duration_improvement": _pct(exp_dur, gui_dur),
             "pct_steps_improvement": _pct(exp_steps, gui_steps),
             "pct_success_improvement": _pct(1.0 - exp_succ, 1.0 - gui_succ),
+            "guided_count": guided_count,
         }
 
 
@@ -1204,6 +1277,7 @@ def _event_to_args(event: dict[str, Any]) -> list[Any]:
         event.get("llm_prompt_tokens", 0),
         event.get("llm_completion_tokens", 0),
         event.get("llm_reasoning", ""),
+        event.get("llm_prompt", ""),
         event.get("duration_ms", 0.0),
         Decimal(str(event.get("cost_usd", 0.0))),
         event.get("status", "success"),

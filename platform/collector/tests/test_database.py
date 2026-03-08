@@ -56,13 +56,13 @@ class TestEventToArgs:
             "parent_event_id": None,
         }
         args = _event_to_args(event)
-        assert len(args) == 19
+        assert len(args) == 20
         assert isinstance(args[0], UUID)  # event_id
         assert isinstance(args[1], UUID)  # workflow_id
         assert args[3] == "tool_call:check_ticket"  # activity
         assert args[7] == {"ticket_id": "T-1001"}  # tool_parameters
-        assert isinstance(args[14], Decimal)  # cost_usd
-        assert args[18] is None  # parent_event_id
+        assert isinstance(args[15], Decimal)  # cost_usd
+        assert args[19] is None  # parent_event_id
 
     def test_converts_parent_event_id(self) -> None:
         event = {
@@ -75,7 +75,7 @@ class TestEventToArgs:
             "parent_event_id": "550e8400-e29b-41d4-a716-446655440000",
         }
         args = _event_to_args(event)
-        assert isinstance(args[18], UUID)
+        assert isinstance(args[19], UUID)
 
     def test_defaults_for_missing_optional_fields(self) -> None:
         event = {
@@ -91,8 +91,9 @@ class TestEventToArgs:
         assert args[7] == {}  # tool_parameters
         assert args[9] == ""  # llm_model
         assert args[10] == 0  # llm_prompt_tokens
-        assert args[13] == 0.0  # duration_ms
-        assert args[14] == Decimal("0.0")  # cost_usd
+        assert args[13] == ""  # llm_prompt
+        assert args[14] == 0.0  # duration_ms
+        assert args[15] == Decimal("0.0")  # cost_usd
 
 
 class TestDatabaseLifecycle:

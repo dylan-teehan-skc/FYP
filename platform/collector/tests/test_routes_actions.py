@@ -39,7 +39,7 @@ class TestRunDemo:
                 assert response.status_code == 200
                 data = response.json()
                 assert data["status"] == "started"
-                assert data["total_scenarios"] == 10
+                assert data["total_scenarios"] == 30
 
     async def test_clamp_rounds(self, client: AsyncClient) -> None:
         with patch.object(actions, "_running_tasks", {}):
@@ -49,7 +49,7 @@ class TestRunDemo:
                 )
                 assert response.status_code == 200
                 data = response.json()
-                assert data["total_scenarios"] == 50
+                assert data["total_scenarios"] == 150
 
     async def test_already_running(self, client: AsyncClient) -> None:
         fake_task = asyncio.ensure_future(asyncio.sleep(100))
@@ -66,32 +66,43 @@ class TestRunDemo:
 class TestStatus:
     async def test_idle(self, client: AsyncClient) -> None:
         with patch.object(actions, "_running_tasks", {}):
-            response = await client.get("/actions/status")
-            assert response.status_code == 200
-            data = response.json()
-            assert data["demo_running"] is False
-            assert data["analysis_running"] is False
-            assert data["message"] == "Idle"
+            with patch.object(actions, "_task_errors", {}):
+                response = await client.get("/actions/status")
+                assert response.status_code == 200
+                data = response.json()
+                assert data["demo_running"] is False
+                assert data["analysis_running"] is False
+                assert data["message"] == "Idle"
+                assert data["last_error"] == ""
 
     async def test_demo_running(self, client: AsyncClient) -> None:
         fake_task = asyncio.ensure_future(asyncio.sleep(100))
         with patch.object(actions, "_running_tasks", {"demo": fake_task}):
-            response = await client.get("/actions/status")
-            data = response.json()
-            assert data["demo_running"] is True
-            assert "Demo running" in data["message"]
-            fake_task.cancel()
+            with patch.object(actions, "_task_errors", {}):
+                response = await client.get("/actions/status")
+                data = response.json()
+                assert data["demo_running"] is True
+                assert "Demo running" in data["message"]
+                fake_task.cancel()
 
     async def test_both_running(self, client: AsyncClient) -> None:
         t1 = asyncio.ensure_future(asyncio.sleep(100))
         t2 = asyncio.ensure_future(asyncio.sleep(100))
         with patch.object(actions, "_running_tasks", {"demo": t1, "analysis": t2}):
-            response = await client.get("/actions/status")
-            data = response.json()
-            assert data["demo_running"] is True
-            assert data["analysis_running"] is True
-            t1.cancel()
-            t2.cancel()
+            with patch.object(actions, "_task_errors", {}):
+                response = await client.get("/actions/status")
+                data = response.json()
+                assert data["demo_running"] is True
+                assert data["analysis_running"] is True
+                t1.cancel()
+                t2.cancel()
+
+    async def test_last_error(self, client: AsyncClient) -> None:
+        with patch.object(actions, "_running_tasks", {}):
+            with patch.object(actions, "_task_errors", {"demo": "connection refused"}):
+                response = await client.get("/actions/status")
+                data = response.json()
+                assert data["last_error"] == "connection refused"
 
 
 class TestRunSubprocess:
@@ -121,40 +132,42 @@ class TestRunSubprocess:
 class TestAnalysisTask:
     async def test_cleans_up_on_success(self) -> None:
         with patch.object(actions, "_running_tasks", {"analysis": AsyncMock()}):
-            with patch.object(actions, "_run_subprocess", new_callable=AsyncMock):
-                await actions._run_analysis_task()
-                assert "analysis" not in actions._running_tasks
-
-    async def test_cleans_up_on_failure(self) -> None:
-        with patch.object(actions, "_running_tasks", {"analysis": AsyncMock()}):
-            with patch.object(
-                actions, "_run_subprocess",
-                new_callable=AsyncMock,
-                side_effect=RuntimeError("boom"),
-            ):
-                try:
+            with patch.object(actions, "_task_errors", {}):
+                with patch.object(actions, "_run_subprocess", new_callable=AsyncMock):
                     await actions._run_analysis_task()
-                except RuntimeError:
-                    pass
-                assert "analysis" not in actions._running_tasks
+                    assert "analysis" not in actions._running_tasks
+                    assert "analysis" not in actions._task_errors
+
+    async def test_captures_error_on_failure(self) -> None:
+        with patch.object(actions, "_running_tasks", {"analysis": AsyncMock()}):
+            with patch.object(actions, "_task_errors", {}):
+                with patch.object(
+                    actions, "_run_subprocess",
+                    new_callable=AsyncMock,
+                    side_effect=RuntimeError("boom"),
+                ):
+                    await actions._run_analysis_task()
+                    assert "analysis" not in actions._running_tasks
+                    assert "boom" in actions._task_errors["analysis"]
 
 
 class TestDemoTask:
     async def test_cleans_up_on_success(self) -> None:
         with patch.object(actions, "_running_tasks", {"demo": AsyncMock()}):
-            with patch.object(actions, "_run_subprocess", new_callable=AsyncMock):
-                await actions._run_demo_task(2)
-                assert "demo" not in actions._running_tasks
+            with patch.object(actions, "_task_errors", {}):
+                with patch.object(actions, "_run_subprocess", new_callable=AsyncMock):
+                    await actions._run_demo_task(2)
+                    assert "demo" not in actions._running_tasks
+                    assert "demo" not in actions._task_errors
 
-    async def test_cleans_up_on_failure(self) -> None:
+    async def test_captures_error_on_failure(self) -> None:
         with patch.object(actions, "_running_tasks", {"demo": AsyncMock()}):
-            with patch.object(
-                actions, "_run_subprocess",
-                new_callable=AsyncMock,
-                side_effect=RuntimeError("boom"),
-            ):
-                try:
+            with patch.object(actions, "_task_errors", {}):
+                with patch.object(
+                    actions, "_run_subprocess",
+                    new_callable=AsyncMock,
+                    side_effect=RuntimeError("boom"),
+                ):
                     await actions._run_demo_task(1)
-                except RuntimeError:
-                    pass
-                assert "demo" not in actions._running_tasks
+                    assert "demo" not in actions._running_tasks
+                    assert "boom" in actions._task_errors["demo"]

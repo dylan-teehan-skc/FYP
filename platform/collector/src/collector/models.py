@@ -24,6 +24,7 @@ class EventIn(BaseModel):
     llm_prompt_tokens: int = 0
     llm_completion_tokens: int = 0
     llm_reasoning: str = ""
+    llm_prompt: str = ""
     duration_ms: float = 0.0
     cost_usd: float = 0.0
     status: str = "success"
@@ -91,6 +92,7 @@ class EventOut(BaseModel):
     llm_prompt_tokens: int = 0
     llm_completion_tokens: int = 0
     llm_reasoning: str = ""
+    llm_prompt: str = ""
     duration_ms: float = 0.0
     cost_usd: float = 0.0
     status: str = "success"
@@ -256,6 +258,7 @@ class SavingsOut(BaseModel):
     pct_duration_improvement: float
     pct_steps_improvement: float
     pct_success_improvement: float
+    guided_count: int
 
 
 # === Task Cluster models ===
@@ -333,6 +336,13 @@ class ClusterDetailOut(BaseModel):
     avg_conformance: float | None = None
 
 
+class DistinctPath(BaseModel):
+    """A unique tool sequence observed in a cluster group."""
+
+    tool_sequence: list[str]
+    workflow_count: int
+
+
 class ClusterGroupDetailOut(BaseModel):
     """Response for GET /task-clusters/group/{name}/detail."""
 
@@ -346,3 +356,4 @@ class ClusterGroupDetailOut(BaseModel):
     mode_stats: ClusterModeStats
     avg_conformance: float | None = None
     optimal_sequence: list[str] = []
+    distinct_paths: list[DistinctPath] = []

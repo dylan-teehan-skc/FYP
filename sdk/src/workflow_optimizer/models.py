@@ -31,6 +31,7 @@ class WorkflowEvent(BaseModel):
     llm_prompt_tokens: int = 0
     llm_completion_tokens: int = 0
     llm_reasoning: str = ""
+    llm_prompt: str = ""
 
     # Performance metrics
     duration_ms: float = 0.0
