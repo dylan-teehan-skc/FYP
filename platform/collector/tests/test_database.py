@@ -605,3 +605,154 @@ class TestDashboardQueries:
         })
         result = await db.get_savings()
         assert result["pct_duration_improvement"] == 0.0
+
+    async def test_get_task_description(self) -> None:
+        db = self._make_db()
+        db._pool.fetchrow = AsyncMock(return_value={
+            "task_description": "Handle customer refund request"
+        })
+        result = await db.get_task_description("660e8400-e29b-41d4-a716-446655440000")
+        assert result == "Handle customer refund request"
+
+    async def test_get_task_description_not_found(self) -> None:
+        db = self._make_db()
+        db._pool.fetchrow = AsyncMock(return_value=None)
+        result = await db.get_task_description("660e8400-e29b-41d4-a716-446655440000")
+        assert result is None
+
+    async def test_list_active_workflows(self) -> None:
+        db = self._make_db()
+        db._pool.fetch = AsyncMock(return_value=[
+            {
+                "workflow_id": "wf-1", "task_description": "test",
+                "status": "in_progress", "duration_ms": None,
+                "steps": 2, "timestamp": "2025-02-23", "is_guided": False,
+            },
+        ])
+        result = await db.list_active_workflows()
+        assert len(result["workflows"]) == 1
+        assert result["total"] == 1
+        assert result["workflows"][0]["status"] == "in_progress"
+
+    async def test_list_active_workflows_empty(self) -> None:
+        db = self._make_db()
+        db._pool.fetch = AsyncMock(return_value=[])
+        result = await db.list_active_workflows()
+        assert result["workflows"] == []
+        assert result["total"] == 0
+
+    async def test_get_group_path_ids(self) -> None:
+        db = self._make_db()
+        db._pool.fetch = AsyncMock(return_value=[
+            {"path_id": "550e8400-e29b-41d4-a716-446655440001"},
+            {"path_id": "550e8400-e29b-41d4-a716-446655440002"},
+        ])
+        result = await db.get_group_path_ids("refund")
+        assert result == [
+            "550e8400-e29b-41d4-a716-446655440001",
+            "550e8400-e29b-41d4-a716-446655440002",
+        ]
+
+    async def test_get_group_path_ids_empty(self) -> None:
+        db = self._make_db()
+        db._pool.fetch = AsyncMock(return_value=[])
+        result = await db.get_group_path_ids("nonexistent")
+        assert result == []
+
+    async def test_get_group_workflows_empty_path_ids(self) -> None:
+        db = self._make_db()
+        result = await db.get_group_workflows([], 0.85)
+        assert result["workflows"] == []
+        assert result["mode_stats"] is None
+        assert result["avg_conformance"] is None
+
+    async def test_get_group_workflows_with_data(self) -> None:
+        db = self._make_db()
+        workflow_rows = [
+            {
+                "workflow_id": "wf-1", "task_description": "test",
+                "similarity": 0.95, "status": "success",
+                "duration_ms": 1000.0, "steps": 3,
+                "timestamp": "2025-02-23", "is_guided": 0,
+                "total_cost_usd": 0.01,
+            },
+        ]
+        mode_stats_row = {
+            "exp_avg_duration": 3000.0, "exp_avg_steps": 6.0,
+            "exp_success_rate": 0.8, "exp_count": 10,
+            "exp_avg_cost": 0.05,
+            "gui_avg_duration": 1800.0, "gui_avg_steps": 4.0,
+            "gui_success_rate": 0.96, "gui_count": 5,
+            "gui_avg_cost": 0.07,
+        }
+        opt_seqs = [{"tool_sequence": ["a", "b"]}]
+        tool_seq_rows = [{"workflow_id": "wf-1", "tools": ["a", "b"]}]
+        db._pool.fetch = AsyncMock(side_effect=[
+            workflow_rows, opt_seqs, tool_seq_rows,
+        ])
+        db._pool.fetchrow = AsyncMock(return_value=mode_stats_row)
+        result = await db.get_group_workflows([
+            "550e8400-e29b-41d4-a716-446655440001",
+            "550e8400-e29b-41d4-a716-446655440002",
+        ], 0.85)
+        assert len(result["workflows"]) == 1
+        assert result["mode_stats"] is not None
+        assert result["avg_conformance"] == 1.0
+
+    async def test_get_group_distinct_paths(self) -> None:
+        db = self._make_db()
+        db._pool.fetch = AsyncMock(return_value=[
+            {"tool_seq": ["a", "b"], "workflow_count": 10},
+            {"tool_seq": ["a", "c"], "workflow_count": 5},
+        ])
+        result = await db.get_group_distinct_paths(
+            ["550e8400-e29b-41d4-a716-446655440001"], 0.85
+        )
+        assert len(result) == 2
+        assert result[0]["tool_sequence"] == ["a", "b"]
+        assert result[0]["workflow_count"] == 10
+
+    async def test_get_group_distinct_paths_empty(self) -> None:
+        db = self._make_db()
+        result = await db.get_group_distinct_paths([], 0.85)
+        assert result == []
+
+    async def test_get_group_execution_graph(self) -> None:
+        db = self._make_db()
+        tool_rows = [
+            {"tool_name": "a", "call_count": 5, "avg_duration_ms": 200.0},
+        ]
+        seq_rows = [
+            {"workflow_id": "wf-1", "tool_name": "a", "step_number": 1},
+        ]
+        db._pool.fetch = AsyncMock(side_effect=[tool_rows, seq_rows])
+        result = await db.get_group_execution_graph(
+            ["550e8400-e29b-41d4-a716-446655440001"], 0.85
+        )
+        assert len(result["nodes"]) == 1
+        assert result["nodes"][0]["id"] == "a"
+
+    async def test_get_group_execution_graph_empty_path_ids(self) -> None:
+        db = self._make_db()
+        result = await db.get_group_execution_graph([], 0.85)
+        assert result == {"nodes": [], "edges": []}
+
+    async def test_get_group_bottlenecks(self) -> None:
+        db = self._make_db()
+        db._pool.fetch = AsyncMock(return_value=[
+            {
+                "tool_name": "a", "call_count": 10,
+                "avg_duration_ms": 500.0, "total_cost_usd": 0.05,
+                "avg_calls_per_workflow": 2.5,
+            },
+        ])
+        result = await db.get_group_bottlenecks(
+            ["550e8400-e29b-41d4-a716-446655440001"], 0.85
+        )
+        assert len(result) == 1
+        assert result[0]["tool_name"] == "a"
+
+    async def test_get_group_bottlenecks_empty_path_ids(self) -> None:
+        db = self._make_db()
+        result = await db.get_group_bottlenecks([], 0.85)
+        assert result == []

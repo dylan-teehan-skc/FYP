@@ -171,3 +171,117 @@ class TestDemoTask:
                     await actions._run_demo_task(1)
                     assert "demo" not in actions._running_tasks
                     assert "boom" in actions._task_errors["demo"]
+
+
+class TestRunLangChainSingle:
+    async def test_start(self, client: AsyncClient) -> None:
+        with patch.object(actions, "_running_tasks", {}):
+            with patch.object(actions, "_run_langchain_single_task", new_callable=AsyncMock):
+                response = await client.post(
+                    "/actions/run-langchain-single", json={"rounds": 2}
+                )
+                assert response.status_code == 200
+                data = response.json()
+                assert data["status"] == "started"
+                assert data["total_scenarios"] == 14
+
+    async def test_already_running(self, client: AsyncClient) -> None:
+        fake_task = asyncio.ensure_future(asyncio.sleep(100))
+        with patch.object(actions, "_running_tasks", {"langchain_single": fake_task}):
+            response = await client.post(
+                "/actions/run-langchain-single", json={"rounds": 1}
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "already_running"
+            fake_task.cancel()
+
+
+class TestRunLangChainMulti:
+    async def test_start(self, client: AsyncClient) -> None:
+        with patch.object(actions, "_running_tasks", {}):
+            with patch.object(actions, "_run_langchain_multi_task", new_callable=AsyncMock):
+                response = await client.post(
+                    "/actions/run-langchain-multi", json={"rounds": 2}
+                )
+                assert response.status_code == 200
+                data = response.json()
+                assert data["status"] == "started"
+                assert data["total_scenarios"] == 14
+
+    async def test_already_running(self, client: AsyncClient) -> None:
+        fake_task = asyncio.ensure_future(asyncio.sleep(100))
+        with patch.object(actions, "_running_tasks", {"langchain_multi": fake_task}):
+            response = await client.post(
+                "/actions/run-langchain-multi", json={"rounds": 1}
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "already_running"
+            fake_task.cancel()
+
+
+class TestLangChainSingleTask:
+    async def test_cleans_up_on_success(self) -> None:
+        with patch.object(actions, "_running_tasks", {"langchain_single": AsyncMock()}):
+            with patch.object(actions, "_task_errors", {}):
+                with patch.object(actions, "_run_subprocess", new_callable=AsyncMock):
+                    await actions._run_langchain_single_task(2)
+                    assert "langchain_single" not in actions._running_tasks
+                    assert "langchain_single" not in actions._task_errors
+
+    async def test_captures_error_on_failure(self) -> None:
+        with patch.object(actions, "_running_tasks", {"langchain_single": AsyncMock()}):
+            with patch.object(actions, "_task_errors", {}):
+                with patch.object(
+                    actions, "_run_subprocess",
+                    new_callable=AsyncMock,
+                    side_effect=RuntimeError("boom"),
+                ):
+                    await actions._run_langchain_single_task(1)
+                    assert "langchain_single" not in actions._running_tasks
+                    assert "boom" in actions._task_errors["langchain_single"]
+
+
+class TestLangChainMultiTask:
+    async def test_cleans_up_on_success(self) -> None:
+        with patch.object(actions, "_running_tasks", {"langchain_multi": AsyncMock()}):
+            with patch.object(actions, "_task_errors", {}):
+                with patch.object(actions, "_run_subprocess", new_callable=AsyncMock):
+                    await actions._run_langchain_multi_task(2)
+                    assert "langchain_multi" not in actions._running_tasks
+                    assert "langchain_multi" not in actions._task_errors
+
+    async def test_captures_error_on_failure(self) -> None:
+        with patch.object(actions, "_running_tasks", {"langchain_multi": AsyncMock()}):
+            with patch.object(actions, "_task_errors", {}):
+                with patch.object(
+                    actions, "_run_subprocess",
+                    new_callable=AsyncMock,
+                    side_effect=RuntimeError("boom"),
+                ):
+                    await actions._run_langchain_multi_task(1)
+                    assert "langchain_multi" not in actions._running_tasks
+                    assert "boom" in actions._task_errors["langchain_multi"]
+
+
+class TestStatusLangChain:
+    async def test_langchain_single_running(self, client: AsyncClient) -> None:
+        fake_task = asyncio.ensure_future(asyncio.sleep(100))
+        with patch.object(actions, "_running_tasks", {"langchain_single": fake_task}):
+            with patch.object(actions, "_task_errors", {}):
+                response = await client.get("/actions/status")
+                data = response.json()
+                assert data["langchain_single_running"] is True
+                assert "LangChain single-agent running" in data["message"]
+                fake_task.cancel()
+
+    async def test_langchain_multi_running(self, client: AsyncClient) -> None:
+        fake_task = asyncio.ensure_future(asyncio.sleep(100))
+        with patch.object(actions, "_running_tasks", {"langchain_multi": fake_task}):
+            with patch.object(actions, "_task_errors", {}):
+                response = await client.get("/actions/status")
+                data = response.json()
+                assert data["langchain_multi_running"] is True
+                assert "LangChain multi-agent running" in data["message"]
+                fake_task.cancel()

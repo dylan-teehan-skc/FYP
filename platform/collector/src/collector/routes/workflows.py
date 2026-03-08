@@ -7,7 +7,13 @@ import asyncio
 from fastapi import APIRouter, HTTPException, Request
 
 from collector.logger import get_logger
-from collector.models import EventOut, TraceOut, WorkflowCompleteIn, WorkflowListOut, WorkflowSummary
+from collector.models import (
+    EventOut,
+    TraceOut,
+    WorkflowCompleteIn,
+    WorkflowListOut,
+    WorkflowSummary,
+)
 
 log = get_logger("collector.routes.workflows")
 router = APIRouter()

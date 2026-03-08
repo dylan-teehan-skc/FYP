@@ -31,7 +31,7 @@ export function OptimalPathGraph({ optimalSequence }: OptimalPathGraphProps) {
 
   const { initialNodes, initialEdges } = useMemo(() => {
     const nodes: ToolNodeType[] = optimalSequence.map((tool, i) => ({
-      id: tool,
+      id: `${tool}_${i}`,
       type: "tool" as const,
       position: {
         x: i * (NODE_WIDTH + H_GAP),
@@ -47,10 +47,12 @@ export function OptimalPathGraph({ optimalSequence }: OptimalPathGraphProps) {
 
     const edges: Edge[] = [];
     for (let i = 0; i < optimalSequence.length - 1; i++) {
+      const sourceId = `${optimalSequence[i]}_${i}`;
+      const targetId = `${optimalSequence[i + 1]}_${i + 1}`;
       edges.push({
-        id: `${optimalSequence[i]}__${optimalSequence[i + 1]}`,
-        source: optimalSequence[i],
-        target: optimalSequence[i + 1],
+        id: `${sourceId}__${targetId}`,
+        source: sourceId,
+        target: targetId,
         type: "default",
         animated: true,
         style: {

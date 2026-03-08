@@ -1046,7 +1046,10 @@ class Database:
             uuid_ids,
             similarity_threshold,
         )
-        return [{"tool_sequence": list(r["tool_seq"]), "workflow_count": r["workflow_count"]} for r in rows]
+        return [
+            {"tool_sequence": list(r["tool_seq"]), "workflow_count": r["workflow_count"]}
+            for r in rows
+        ]
 
     async def get_group_execution_graph(
         self,
