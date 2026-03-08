@@ -89,7 +89,92 @@ class Database:
             return [float(x) for x in embedding.strip("[]").split(",")]
         return list(embedding)
 
+    async def fetch_centroid_embedding(
+        self, workflow_ids: list[str],
+    ) -> list[float] | None:
+        """Compute the centroid (mean) of embeddings for a set of workflows."""
+        assert self._pool is not None
+        if not workflow_ids:
+            return None
+        uuids = [UUID(wid) for wid in workflow_ids]
+        rows = await self._pool.fetch(
+            "SELECT embedding FROM workflow_embeddings WHERE workflow_id = ANY($1::uuid[])",
+            uuids,
+        )
+        if not rows:
+            return None
+
+        vectors: list[list[float]] = []
+        for row in rows:
+            emb = row["embedding"]
+            if emb is None:
+                continue
+            if isinstance(emb, str):
+                vectors.append([float(x) for x in emb.strip("[]").split(",")])
+            else:
+                vectors.append(list(emb))
+
+        if not vectors:
+            return None
+
+        dim = len(vectors[0])
+        centroid = [
+            sum(v[i] for v in vectors) / len(vectors)
+            for i in range(dim)
+        ]
+        return centroid
+
+    async def fetch_mode_success_rates(
+        self, workflow_ids: list[str],
+    ) -> dict[str, float | None]:
+        """Compute guided and exploration success rates for a set of workflows.
+
+        Returns {"guided": rate_or_None, "exploration": rate_or_None}.
+        """
+        assert self._pool is not None
+        if not workflow_ids:
+            return {"guided": None, "exploration": None}
+
+        uuids = [UUID(wid) for wid in workflow_ids]
+        rows = await self._pool.fetch(
+            """
+            WITH mode_map AS (
+                SELECT DISTINCT workflow_id,
+                    CASE WHEN activity = 'optimize:guided' THEN 1 ELSE 0 END AS is_guided
+                FROM event_logs
+                WHERE workflow_id = ANY($1::uuid[])
+                  AND activity IN ('optimize:guided', 'optimize:exploration')
+            ),
+            outcomes AS (
+                SELECT e.workflow_id,
+                    COALESCE(mm.is_guided, 0) AS is_guided,
+                    CASE WHEN e.activity = 'workflow:complete' THEN 1 ELSE 0 END AS succeeded
+                FROM event_logs e
+                LEFT JOIN mode_map mm ON mm.workflow_id = e.workflow_id
+                WHERE e.workflow_id = ANY($1::uuid[])
+                  AND e.activity IN ('workflow:complete', 'workflow:fail')
+            )
+            SELECT is_guided,
+                AVG(succeeded) AS success_rate
+            FROM outcomes
+            GROUP BY is_guided
+            """,
+            uuids,
+        )
+
+        result: dict[str, float | None] = {"guided": None, "exploration": None}
+        for row in rows:
+            key = "guided" if row["is_guided"] == 1 else "exploration"
+            result[key] = float(row["success_rate"])
+        return result
+
     # --- Write methods ---
+
+    async def clear_optimal_paths(self) -> None:
+        """Delete all optimal paths (called at the start of each analysis run)."""
+        assert self._pool is not None
+        await self._pool.execute("DELETE FROM optimal_paths")
+        log.info("optimal_paths_cleared")
 
     async def upsert_optimal_path(self, path: dict[str, Any]) -> None:
         """Write an optimal path to the DB (DELETE + INSERT in transaction)."""
@@ -103,8 +188,9 @@ class Database:
                 await conn.execute(
                     """INSERT INTO optimal_paths
                         (path_id, task_cluster, tool_sequence, avg_duration_ms,
-                         avg_steps, success_rate, execution_count, embedding, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+                         avg_steps, success_rate, execution_count, embedding,
+                         guided_success_rate, exploration_success_rate, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
                     """,
                     UUID(path["path_id"]),
                     path["task_cluster"],
@@ -114,5 +200,7 @@ class Database:
                     path["success_rate"],
                     path["execution_count"],
                     str(path["embedding"]) if path.get("embedding") else None,
+                    path.get("guided_success_rate"),
+                    path.get("exploration_success_rate"),
                 )
         log.info("optimal_path_upserted", task_cluster=path["task_cluster"])

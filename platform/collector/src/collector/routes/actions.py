@@ -24,6 +24,7 @@ LANGCHAIN_PYTHON = PROJECT_ROOT / "demo" / "langchain" / ".venv" / "bin" / "pyth
 LANGCHAIN_DIR = PROJECT_ROOT / "demo" / "langchain"
 
 _running_tasks: dict[str, asyncio.Task[Any]] = {}
+_task_errors: dict[str, str] = {}
 
 
 class RunDemoIn(BaseModel):
@@ -42,6 +43,7 @@ class StatusOut(BaseModel):
     langchain_single_running: bool = False
     langchain_multi_running: bool = False
     message: str = ""
+    last_error: str = ""
 
 
 async def _run_subprocess(label: str, *args: str, cwd: Path | None = None) -> str:
@@ -64,47 +66,77 @@ async def _run_subprocess(label: str, *args: str, cwd: Path | None = None) -> st
 
 async def _run_analysis_task() -> None:
     try:
+        _task_errors.pop("analysis", None)
         await _run_subprocess(
             "analysis",
             str(ANALYSIS_PYTHON), "-m", "analysis.pipeline",
             cwd=ANALYSIS_DIR,
         )
+    except Exception as e:
+        _task_errors["analysis"] = str(e)
     finally:
         _running_tasks.pop("analysis", None)
 
 
 async def _run_demo_task(rounds: int) -> None:
     try:
-        await _run_subprocess(
-            "demo",
-            str(DEMO_PYTHON), str(DEMO_SCRIPT),
-            "--rounds", str(rounds),
-            cwd=DEMO_DIR,
-        )
+        _task_errors.pop("demo", None)
+        for _ in range(rounds):
+            await _run_subprocess(
+                "demo",
+                str(DEMO_PYTHON), str(DEMO_SCRIPT),
+                "--rounds", "1",
+                cwd=DEMO_DIR,
+            )
+            await _run_subprocess(
+                "analysis",
+                str(ANALYSIS_PYTHON), "-m", "analysis.pipeline",
+                cwd=ANALYSIS_DIR,
+            )
+    except Exception as e:
+        _task_errors["demo"] = str(e)
     finally:
         _running_tasks.pop("demo", None)
 
 
 async def _run_langchain_single_task(rounds: int) -> None:
     try:
-        await _run_subprocess(
-            "langchain_single",
-            str(LANGCHAIN_PYTHON), "-m", "single_agent.main",
-            "--rounds", str(rounds),
-            cwd=LANGCHAIN_DIR,
-        )
+        _task_errors.pop("langchain_single", None)
+        for _ in range(rounds):
+            await _run_subprocess(
+                "langchain_single",
+                str(LANGCHAIN_PYTHON), "-m", "single_agent.main",
+                "--rounds", "1",
+                cwd=LANGCHAIN_DIR,
+            )
+            await _run_subprocess(
+                "analysis",
+                str(ANALYSIS_PYTHON), "-m", "analysis.pipeline",
+                cwd=ANALYSIS_DIR,
+            )
+    except Exception as e:
+        _task_errors["langchain_single"] = str(e)
     finally:
         _running_tasks.pop("langchain_single", None)
 
 
 async def _run_langchain_multi_task(rounds: int) -> None:
     try:
-        await _run_subprocess(
-            "langchain_multi",
-            str(LANGCHAIN_PYTHON), "-m", "multi_agent.main",
-            "--rounds", str(rounds),
-            cwd=LANGCHAIN_DIR,
-        )
+        _task_errors.pop("langchain_multi", None)
+        for _ in range(rounds):
+            await _run_subprocess(
+                "langchain_multi",
+                str(LANGCHAIN_PYTHON), "-m", "multi_agent.main",
+                "--rounds", "1",
+                cwd=LANGCHAIN_DIR,
+            )
+            await _run_subprocess(
+                "analysis",
+                str(ANALYSIS_PYTHON), "-m", "analysis.pipeline",
+                cwd=ANALYSIS_DIR,
+            )
+    except Exception as e:
+        _task_errors["langchain_multi"] = str(e)
     finally:
         _running_tasks.pop("langchain_multi", None)
 
@@ -130,7 +162,7 @@ async def run_demo(body: RunDemoIn) -> ActionOut:
         )
 
     rounds = max(1, min(body.rounds, 10))
-    total = rounds * 5
+    total = rounds * 15
     task = asyncio.create_task(_run_demo_task(rounds))
     _running_tasks["demo"] = task
     return ActionOut(
@@ -204,10 +236,14 @@ async def get_status() -> StatusOut:
     if analysis_running:
         parts.append("Analysis running")
 
+    errors = list(_task_errors.values())
+    last_error = errors[-1] if errors else ""
+
     return StatusOut(
         demo_running=demo_running,
         analysis_running=analysis_running,
         langchain_single_running=lc_single,
         langchain_multi_running=lc_multi,
         message=" | ".join(parts) if parts else "Idle",
+        last_error=last_error,
     )

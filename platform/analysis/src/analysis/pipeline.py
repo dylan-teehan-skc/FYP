@@ -33,6 +33,8 @@ async def run_analysis_for_cluster(
     task_cluster: str,
     workflow_ids: list[str],
     settings: Settings,
+    *,
+    skip_upsert: bool = False,
 ) -> AnalysisResult:
     """Run the full analysis pipeline for a single cluster."""
     # 1. Reconstruct traces
@@ -86,9 +88,12 @@ async def run_analysis_for_cluster(
     suggestions = generate_suggestions(patterns, optimal_path, traces)
 
     # 9. Upsert optimal path to DB (attach embedding from cluster for similarity search)
-    if optimal_path:
+    #    skip_upsert=True for group-level clusters that mix different workflow types —
+    #    only subclusters (separated by NED) should produce paths for the optimizer.
+    if optimal_path and not skip_upsert:
         if not optimal_path.embedding and workflow_ids:
-            optimal_path.embedding = await db.fetch_embedding_for_workflow(workflow_ids[0])
+            optimal_path.embedding = await db.fetch_centroid_embedding(workflow_ids)
+        mode_rates = await db.fetch_mode_success_rates(workflow_ids)
         await db.upsert_optimal_path({
             "path_id": optimal_path.path_id,
             "task_cluster": task_cluster,
@@ -98,6 +103,8 @@ async def run_analysis_for_cluster(
             "success_rate": optimal_path.success_rate,
             "execution_count": len(traces),  # cluster size, not exact-match count
             "embedding": optimal_path.embedding,
+            "guided_success_rate": mode_rates["guided"],
+            "exploration_success_rate": mode_rates["exploration"],
         })
 
     log.info(
@@ -140,6 +147,10 @@ async def run_analysis(
         log.info("no_clusters_found")
         return []
 
+    # Clear stale optimal paths from previous runs — cluster names may change
+    # between runs (LLM-generated), so per-cluster upserts alone can leave orphans.
+    await db.clear_optimal_paths()
+
     results = []
     for idx, (cluster_label, cluster_result) in enumerate(clusters.items()):
         # Level 2: Trace sub-clustering
@@ -172,10 +183,11 @@ async def run_analysis(
             )
             results.append(result)
 
-        # Group-level optimal path: run analysis across ALL workflows in this cluster
+        # Group-level analysis for dashboard metrics (no optimal path upsert —
+        # parent clusters mix different workflow types and produce wrong paths).
         all_wf_ids = [str(wf) for wf in cluster_result.workflow_ids]
         group_result = await run_analysis_for_cluster(
-            db, cluster_name, all_wf_ids, settings
+            db, cluster_name, all_wf_ids, settings, skip_upsert=True,
         )
         results.append(group_result)
 

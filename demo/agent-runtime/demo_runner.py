@@ -51,6 +51,7 @@ class LastDecision:
     """Shared state: reasoning engine writes, tracing MCP client reads."""
 
     reasoning: str = ""
+    llm_prompt: str = ""
     prompt_tokens: int = 0
     completion_tokens: int = 0
     cost_usd: float = 0.0
@@ -298,6 +299,7 @@ class TracingReasoningEngine:
     ) -> dict[str, Any]:
         result = await self._inner.reason(task, context, tools_doc, history)
         self._last_decision.reasoning = result.get("reasoning", "")
+        self._last_decision.llm_prompt = result.get("llm_prompt", "")
         self._last_decision.prompt_tokens = result.get("prompt_tokens", 0)
         self._last_decision.completion_tokens = result.get("completion_tokens", 0)
         self._last_decision.cost_usd = result.get("cost_usd", 0.0)
@@ -345,6 +347,7 @@ class TracingMCPClient:
             llm_prompt_tokens=self._last_decision.prompt_tokens,
             llm_completion_tokens=self._last_decision.completion_tokens,
             llm_reasoning=self._last_decision.reasoning,
+            llm_prompt=self._last_decision.llm_prompt,
         ) as step:
             step.set_cost(self._last_decision.cost_usd)
             result = await self._inner.call_tool(tool_name, parameters)
@@ -414,6 +417,42 @@ def build_guided_context(response: OptimalPathResponse) -> str:
         "shows [SUCCESS] in your execution history."
     )
     return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Outcome verification
+# ---------------------------------------------------------------------------
+
+async def verify_outcome(
+    scenario: Scenario,
+    mcp_client: MCPClient,
+) -> tuple[bool, str]:
+    """Check MCP server state to determine if the workflow actually succeeded."""
+    ticket_resp = await mcp_client.call_tool(
+        "check_ticket_status", {"ticket_id": scenario.ticket_id},
+    )
+    if not ticket_resp.get("success"):
+        return False, f"Could not verify ticket: {ticket_resp.get('error')}"
+
+    ticket_status = ticket_resp["result"]["status"]
+    ticket_resolved = ticket_status in ("closed", "escalated")
+
+    if scenario.workflow_type == "refund_request":
+        order_resp = await mcp_client.call_tool(
+            "get_order_details", {"order_id": scenario.order_id},
+        )
+        if not order_resp.get("success"):
+            return False, f"Could not verify order: {order_resp.get('error')}"
+        refund_done = order_resp["result"].get("refund_status") == "refunded"
+        if refund_done and ticket_resolved:
+            return True, "Refund processed and ticket resolved"
+        if refund_done:
+            return True, "Refund processed (ticket still open)"
+        return False, f"Refund not processed, ticket {ticket_status}"
+
+    if ticket_resolved:
+        return True, f"Ticket {ticket_status}"
+    return False, f"Ticket still {ticket_status}"
 
 
 # ---------------------------------------------------------------------------
@@ -491,6 +530,27 @@ async def run_scenario(
                 history = agent.action_history
             finally:
                 tracing_mcp.set_trace(None)
+
+            verified, verify_reason = await verify_outcome(scenario, mcp_client)
+            if not success and verified:
+                log.info(
+                    "false_negative_corrected",
+                    ticket=scenario.ticket_id,
+                    reason=verify_reason,
+                )
+                success = True
+            elif success and not verified:
+                log.warning(
+                    "false_positive_corrected",
+                    ticket=scenario.ticket_id,
+                    reason=verify_reason,
+                )
+                success = False
+
+            if not success:
+                trace.mark_failed(
+                    verify_reason if not verified else "Agent did not complete",
+                )
 
         duration_ms = (time.perf_counter() - start) * 1000
         tool_sequence = [h["action"] for h in history if h.get("action")]

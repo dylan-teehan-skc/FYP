@@ -17,6 +17,7 @@ from collector.models import (
     ClusterModeStats,
     ClusterWorkflow,
     ComparisonOut,
+    DistinctPath,
     ExecutionGraphOut,
     ModeDistributionOut,
     ModeStats,
@@ -317,10 +318,30 @@ async def get_cluster_group_detail(
         (r for r in all_rows if r["task_cluster"] == group_name),
         None,
     )
-    optimal_sequence = list(group_path["tool_sequence"]) if group_path else []
+    if group_path:
+        optimal_sequence = list(group_path["tool_sequence"])
+    else:
+        # No group-level path stored (skip_upsert=True in analysis pipeline).
+        # Fall back to the best-performing variant's tool sequence.
+        best = max(
+            (s for s in subclusters if s.tool_sequence),
+            key=lambda s: (s.success_rate or 0, s.execution_count),
+            default=None,
+        )
+        optimal_sequence = list(best.tool_sequence) if best else []
 
     # Filter subclusters to only include subcluster variants (not the group-level path)
     subclusters = [s for s in subclusters if s.task_cluster != group_name]
+
+    # Get all distinct tool sequences observed across workflows in this group
+    distinct_rows = await db.get_group_distinct_paths(path_ids, settings.similarity_threshold)
+    distinct_paths = [
+        DistinctPath(
+            tool_sequence=r["tool_sequence"],
+            workflow_count=r["workflow_count"],
+        )
+        for r in distinct_rows
+    ]
 
     log.info("cluster_group_detail", group=group_name, workflows=len(workflows))
     return ClusterGroupDetailOut(
@@ -334,6 +355,7 @@ async def get_cluster_group_detail(
         mode_stats=mode_stats,
         avg_conformance=_fopt(data.get("avg_conformance")),
         optimal_sequence=optimal_sequence,
+        distinct_paths=distinct_paths,
     )
 
 

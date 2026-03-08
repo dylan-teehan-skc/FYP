@@ -9,6 +9,7 @@ interface DeltaCardProps {
   after: number;
   unit: string;
   lowerIsBetter: boolean;
+  hasData?: boolean;
 }
 
 export function DeltaCard({
@@ -17,17 +18,21 @@ export function DeltaCard({
   after,
   unit,
   lowerIsBetter,
+  hasData = true,
 }: DeltaCardProps) {
-  const { label: deltaLabel, pct, improved: rawImproved } = formatDelta(
-    before,
-    after
-  );
+  const noGuided = !hasData;
+
+  const { label: deltaLabel, pct, improved: rawImproved } = noGuided
+    ? { label: "—", pct: 0, improved: false }
+    : formatDelta(before, after);
 
   // "improved" from formatDelta means before > after (value went down).
   // For lowerIsBetter metrics that is genuinely good; for higherIsBetter it is bad.
   const isGood = lowerIsBetter ? rawImproved : !rawImproved;
-  const accentClass = pct === 0 ? "text-muted-foreground" : isGood ? "text-emerald-400" : "text-red-400";
-  const badgeBg = pct === 0
+  const accentClass = noGuided || pct === 0
+    ? "text-muted-foreground"
+    : isGood ? "text-emerald-400" : "text-red-400";
+  const badgeBg = noGuided || pct === 0
     ? "bg-muted text-muted-foreground"
     : isGood
     ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25"
@@ -45,10 +50,18 @@ export function DeltaCard({
           </span>
           <span className="text-sm text-muted-foreground">{unit}</span>
           <span className="mx-1 text-muted-foreground">→</span>
-          <span className={`font-mono text-2xl font-semibold tabular-nums ${accentClass}`}>
-            {after}
-          </span>
-          <span className="text-sm text-muted-foreground">{unit}</span>
+          {noGuided ? (
+            <span className="font-mono text-2xl font-semibold tabular-nums text-muted-foreground">
+              -
+            </span>
+          ) : (
+            <>
+              <span className={`font-mono text-2xl font-semibold tabular-nums ${accentClass}`}>
+                {after}
+              </span>
+              <span className="text-sm text-muted-foreground">{unit}</span>
+            </>
+          )}
         </div>
         <div className="mt-3">
           <span

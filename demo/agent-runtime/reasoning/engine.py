@@ -44,6 +44,7 @@ class ReasoningEngine:
                 result = self._parse_response(text)
 
                 if result["action"] is not None or attempt == self._MAX_JSON_RETRIES:
+                    result["llm_prompt"] = prompt
                     result["prompt_tokens"] = response.usage.prompt_tokens
                     result["completion_tokens"] = response.usage.completion_tokens
                     try:
@@ -69,6 +70,7 @@ class ReasoningEngine:
                     "reasoning": f"Error: {e}",
                     "action": None,
                     "parameters": {},
+                    "llm_prompt": prompt,
                     "prompt_tokens": 0,
                     "completion_tokens": 0,
                     "cost_usd": 0.0,
@@ -78,6 +80,7 @@ class ReasoningEngine:
             "reasoning": "",
             "action": None,
             "parameters": {},
+            "llm_prompt": prompt,
             "prompt_tokens": 0,
             "completion_tokens": 0,
             "cost_usd": 0.0,

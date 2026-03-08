@@ -28,7 +28,10 @@ async def optimize_path(body: OptimizePathIn, request: Request) -> OptimalPathOu
         log.info("optimize_exploration", reason="embedding_failed")
         return OptimalPathOut(mode="exploration")
 
-    match = await db.find_similar_paths(embedding)
+    match = await db.find_similar_paths(
+        embedding,
+        min_executions=request.app.state.settings.min_executions,
+    )
     if not match:
         log.info("optimize_exploration", reason="no_matching_paths")
         return OptimalPathOut(mode="exploration")
@@ -39,6 +42,25 @@ async def optimize_path(body: OptimizePathIn, request: Request) -> OptimalPathOu
             "optimize_exploration",
             reason="below_threshold",
             similarity=round(similarity, 4),
+        )
+        return OptimalPathOut(mode="exploration")
+
+    # Regression check: if guided mode is performing worse than exploration
+    # for this cluster, fall back to exploration until the next analysis run.
+    guided_rate = match["guided_success_rate"]
+    exploration_rate = match["exploration_success_rate"]
+    margin = request.app.state.settings.regression_margin
+    if (
+        guided_rate is not None
+        and exploration_rate is not None
+        and guided_rate < exploration_rate - margin
+    ):
+        log.info(
+            "optimize_exploration",
+            reason="regression_detected",
+            guided_success_rate=round(guided_rate, 4),
+            exploration_success_rate=round(exploration_rate, 4),
+            margin=margin,
         )
         return OptimalPathOut(mode="exploration")
 

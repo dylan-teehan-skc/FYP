@@ -127,6 +127,7 @@ export function OptimizationContext({
   // Exploration baseline from comparison endpoint
   const expStats = comparison?.exploration;
   const hasExpBaseline = expStats != null && expStats.count > 0;
+  const hasGuidedData = (comparison?.guided?.count ?? 0) > 0;
 
   return (
     <Card className="border-border bg-card shadow-none">
@@ -142,7 +143,7 @@ export function OptimizationContext({
         </div>
 
         {/* Mode + Match info */}
-        <div className="mb-4 flex items-center gap-3">
+        <div className={`flex items-center gap-3 ${hasGuidedData ? "mb-4" : ""}`}>
           <div className="flex items-center gap-2">
             <div className={`h-2 w-2 rounded-full ${dotClass}`} />
             <span className={`text-sm font-semibold ${modeTextClass}`}>
@@ -157,80 +158,88 @@ export function OptimizationContext({
           </span>
         </div>
 
-        {/* Performance vs Optimal Baseline */}
-        <div className="mb-4">
-          <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-            {isGuided ? "Performance vs Optimal Baseline" : "What Optimization Could Save"}
+        {!hasGuidedData ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Run workflows in guided mode to see optimization comparisons.
           </p>
-          <div className="grid grid-cols-3 gap-4">
-            <MetricComparison
-              label="Duration"
-              actual={totalDurationMs}
-              baseline={bestPath.avg_duration_ms}
-              format={formatDuration}
-              lowerIsBetter={true}
-              baselineLabel="optimal"
-            />
-            <MetricComparison
-              label="Steps"
-              actual={totalSteps}
-              baseline={bestPath.avg_steps}
-              format={formatNumber}
-              lowerIsBetter={true}
-              baselineLabel="optimal"
-            />
-            <MetricComparison
-              label="Success Rate"
-              actual={actualSuccess * 100}
-              baseline={bestPath.success_rate * 100}
-              format={(v) => `${v.toFixed(0)}%`}
-              lowerIsBetter={false}
-              baselineLabel="optimal"
-            />
-          </div>
-        </div>
-
-        {/* Savings vs Exploration Average (only if data exists) */}
-        {hasExpBaseline && (
-          <div className="border-t border-border pt-4">
-            <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-              {isGuided ? "Savings vs Exploration Average" : "Exploration Baseline"}
-            </p>
-            <div className="grid grid-cols-3 gap-4">
-              <MetricComparison
-                label="Duration"
-                actual={totalDurationMs}
-                baseline={expStats.avg_duration_ms}
-                format={formatDuration}
-                lowerIsBetter={true}
-                baselineLabel="explore avg"
-              />
-              <MetricComparison
-                label="Steps"
-                actual={totalSteps}
-                baseline={expStats.avg_steps}
-                format={formatNumber}
-                lowerIsBetter={true}
-                baselineLabel="explore avg"
-              />
-              <MetricComparison
-                label="Success Rate"
-                actual={actualSuccess * 100}
-                baseline={(expStats.success_rate ?? 0) * 100}
-                format={(v) => `${v.toFixed(0)}%`}
-                lowerIsBetter={false}
-                baselineLabel="explore avg"
-              />
+        ) : (
+          <>
+            {/* Performance vs Optimal Baseline */}
+            <div className="mb-4">
+              <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                {isGuided ? "Performance vs Optimal Baseline" : "What Optimization Could Save"}
+              </p>
+              <div className="grid grid-cols-3 gap-4">
+                <MetricComparison
+                  label="Duration"
+                  actual={totalDurationMs}
+                  baseline={bestPath.avg_duration_ms}
+                  format={formatDuration}
+                  lowerIsBetter={true}
+                  baselineLabel="optimal"
+                />
+                <MetricComparison
+                  label="Steps"
+                  actual={totalSteps}
+                  baseline={bestPath.avg_steps}
+                  format={formatNumber}
+                  lowerIsBetter={true}
+                  baselineLabel="optimal"
+                />
+                <MetricComparison
+                  label="Success Rate"
+                  actual={actualSuccess * 100}
+                  baseline={bestPath.success_rate * 100}
+                  format={(v) => `${v.toFixed(0)}%`}
+                  lowerIsBetter={false}
+                  baselineLabel="optimal"
+                />
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* Optimal path metadata */}
-        <div className="mt-4 flex items-center gap-4 border-t border-border pt-3 text-[10px] text-muted-foreground/50 tabular-nums font-mono">
-          <span>Optimal path: {bestPath.execution_count} executions</span>
-          <span>{(bestPath.success_rate * 100).toFixed(0)}% success rate</span>
-          <span>{bestPath.tool_sequence.length} steps</span>
-        </div>
+            {/* Savings vs Exploration Average (only if data exists) */}
+            {hasExpBaseline && (
+              <div className="border-t border-border pt-4">
+                <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                  {isGuided ? "Savings vs Exploration Average" : "Exploration Baseline"}
+                </p>
+                <div className="grid grid-cols-3 gap-4">
+                  <MetricComparison
+                    label="Duration"
+                    actual={totalDurationMs}
+                    baseline={expStats.avg_duration_ms}
+                    format={formatDuration}
+                    lowerIsBetter={true}
+                    baselineLabel="explore avg"
+                  />
+                  <MetricComparison
+                    label="Steps"
+                    actual={totalSteps}
+                    baseline={expStats.avg_steps}
+                    format={formatNumber}
+                    lowerIsBetter={true}
+                    baselineLabel="explore avg"
+                  />
+                  <MetricComparison
+                    label="Success Rate"
+                    actual={actualSuccess * 100}
+                    baseline={(expStats.success_rate ?? 0) * 100}
+                    format={(v) => `${v.toFixed(0)}%`}
+                    lowerIsBetter={false}
+                    baselineLabel="explore avg"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Optimal path metadata */}
+            <div className="mt-4 flex items-center gap-4 border-t border-border pt-3 text-[10px] text-muted-foreground/50 tabular-nums font-mono">
+              <span>Optimal path: {bestPath.execution_count} executions</span>
+              <span>{(bestPath.success_rate * 100).toFixed(0)}% success rate</span>
+              <span>{bestPath.tool_sequence.length} steps</span>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );

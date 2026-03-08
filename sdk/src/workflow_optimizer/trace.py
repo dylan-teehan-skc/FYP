@@ -28,6 +28,7 @@ class StepContext:
         llm_prompt_tokens: int = 0,
         llm_completion_tokens: int = 0,
         llm_reasoning: str = "",
+        llm_prompt: str = "",
         parent_event_id: str | None = None,
     ) -> None:
         self._trace = trace
@@ -39,6 +40,7 @@ class StepContext:
         self._llm_prompt_tokens = llm_prompt_tokens
         self._llm_completion_tokens = llm_completion_tokens
         self._llm_reasoning = llm_reasoning
+        self._llm_prompt = llm_prompt
         self._parent_event_id = parent_event_id
         self._event_id = str(uuid.uuid4())
         self._step_number = 0
@@ -96,6 +98,7 @@ class StepContext:
             llm_prompt_tokens=self._llm_prompt_tokens,
             llm_completion_tokens=self._llm_completion_tokens,
             llm_reasoning=self._llm_reasoning,
+            llm_prompt=self._llm_prompt,
             duration_ms=duration_ms,
             cost_usd=self._cost_usd,
             status=self._status,
@@ -128,6 +131,8 @@ class TraceContext:
         self._step_counter = 0
         self._start_time = 0.0
         self._active = False
+        self._failed = False
+        self._failure_reason: str | None = None
 
     @property
     def workflow_id(self) -> str:
@@ -144,6 +149,7 @@ class TraceContext:
         llm_prompt_tokens: int = 0,
         llm_completion_tokens: int = 0,
         llm_reasoning: str = "",
+        llm_prompt: str = "",
         parent_event_id: str | None = None,
     ) -> StepContext:
         """Create a step context manager for a single tool call."""
@@ -160,8 +166,14 @@ class TraceContext:
             llm_prompt_tokens=llm_prompt_tokens,
             llm_completion_tokens=llm_completion_tokens,
             llm_reasoning=llm_reasoning,
+            llm_prompt=llm_prompt,
             parent_event_id=parent_event_id,
         )
+
+    def mark_failed(self, reason: str = "") -> None:
+        """Mark this workflow as failed."""
+        self._failed = True
+        self._failure_reason = reason
 
     def emit_mode(self, mode: str) -> None:
         """Emit an optimize:guided or optimize:exploration event."""
@@ -206,7 +218,11 @@ class TraceContext:
     ) -> None:
         duration_ms = (time.perf_counter() - self._start_time) * 1000
 
-        if exc_type is not None:
+        if exc_type is not None or self._failed:
+            error_message = (
+                str(exc_val) if exc_type
+                else (self._failure_reason or "")
+            )
             fail_event = WorkflowEvent(
                 workflow_id=self._workflow_id,
                 activity="workflow:fail",
@@ -214,7 +230,7 @@ class TraceContext:
                 agent_role=self._agent_role,
                 duration_ms=duration_ms,
                 status="failure",
-                error_message=str(exc_val),
+                error_message=error_message,
                 step_number=self._step_counter + 1,
             )
             self._transport.enqueue(fail_event)

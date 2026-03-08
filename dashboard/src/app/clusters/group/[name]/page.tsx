@@ -51,7 +51,6 @@ import type {
   ClusterGroupDetailResponse,
   ClusterWorkflow,
   BottleneckTool,
-  TaskClusterSummary,
 } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -180,14 +179,6 @@ function SkeletonBlock({ rows = 4 }: { rows?: number }) {
       ))}
     </div>
   );
-}
-
-/** Derive a human-readable variant label — prefer the customer ticket text. */
-function variantLabel(sub: TaskClusterSummary): string {
-  if (sub.task_description) return sub.task_description;
-  const match = sub.task_cluster.match(/\(subcluster_(\d+)\)$/);
-  if (match) return `Variant ${parseInt(match[1]) + 1}`;
-  return sub.task_cluster;
 }
 
 // ---------------------------------------------------------------------------
@@ -610,29 +601,23 @@ export default function ClusterGroupDetailPage() {
                 </TabsContent>
 
                 <TabsContent value="variants">
-                  {detail.subclusters.length === 0 ? (
+                  {(detail.distinct_paths?.length ?? 0) === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">
                       No variant paths available.
                     </p>
                   ) : (
                     <div className="space-y-6 pt-2">
-                      {detail.subclusters.map((sub, idx) => (
-                        <div key={sub.path_id}>
+                      {detail.distinct_paths.map((dp, idx) => (
+                        <div key={idx}>
                           <p className="mb-2 text-xs font-medium text-muted-foreground">
-                            {variantLabel(sub)}
+                            {dp.tool_sequence.join(" → ")}
                             <span className="ml-2 font-mono tabular-nums text-muted-foreground/60">
-                              ({sub.tool_sequence.length} steps)
+                              ({dp.tool_sequence.length} steps · {dp.workflow_count} workflow{dp.workflow_count !== 1 ? "s" : ""})
                             </span>
                           </p>
-                          {sub.tool_sequence.length > 0 ? (
-                            <OptimalPathGraph
-                              optimalSequence={sub.tool_sequence}
-                            />
-                          ) : (
-                            <p className="text-sm text-muted-foreground">
-                              No tool sequence recorded for this variant.
-                            </p>
-                          )}
+                          <OptimalPathGraph
+                            optimalSequence={dp.tool_sequence}
+                          />
                         </div>
                       ))}
                     </div>

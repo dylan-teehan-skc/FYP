@@ -46,8 +46,14 @@ def compute_path_metrics(
     matching = [t for t in traces if t.tool_sequence == path]
 
     if not matching:
-        # Broaden: traces containing the path as a subsequence
-        matching = [t for t in traces if _is_subsequence(path, t.tool_sequence)]
+        # Broaden: traces containing the path as a subsequence, but require
+        # the path to cover at least 50% of the trace's tools to prevent
+        # short fragments (e.g. ["get_order"]) from matching long traces.
+        matching = [
+            t for t in traces
+            if _is_subsequence(path, t.tool_sequence)
+            and len(path) >= len(t.tool_sequence) * 0.5
+        ]
 
     if not matching:
         return {
@@ -158,7 +164,8 @@ def find_pareto_paths(
     1. Filter edges by success_rate
     2. Enumerate all source-to-sink paths
     3. Score each on (duration, cost, 1-success_rate)
-    4. Compute Pareto front + select knee point
+    4. Filter by minimum support (execution_count)
+    5. Compute Pareto front + select knee point
     """
     filtered = filter_graph_by_success_rate(graph, min_success_rate)
     raw_paths = enumerate_paths(filtered)
@@ -169,6 +176,22 @@ def find_pareto_paths(
         for p in raw_paths
     ]
     tool_paths = [p for p in tool_paths if p]  # remove empty
+
+    # Filter out fragment paths that are too short relative to actual traces.
+    # A path must cover at least 50% of the average trace length.
+    if traces and tool_paths:
+        avg_trace_len = sum(len(t.tool_sequence) for t in traces) / len(traces)
+        min_path_len = max(2, int(avg_trace_len * 0.5))
+        long_enough = [p for p in tool_paths if len(p) >= min_path_len]
+        if long_enough:
+            tool_paths = long_enough
+            log.info(
+                "path_coverage_filter",
+                cluster=task_cluster,
+                avg_trace_len=round(avg_trace_len, 1),
+                min_path_len=min_path_len,
+                paths_remaining=len(tool_paths),
+            )
 
     if not tool_paths:
         # Fallback to most frequent path
@@ -191,6 +214,21 @@ def find_pareto_paths(
     if not candidates:
         log.info("no_viable_paths", cluster=task_cluster)
         return []
+
+    # Minimum support: path must have been followed by enough traces to be
+    # considered reliable. At least 2 traces or 10% of the cluster.
+    min_support = max(2, int(len(traces) * 0.10))
+    supported = [
+        (p, m) for p, m in candidates if m["execution_count"] >= min_support
+    ]
+    if not supported:
+        log.info(
+            "no_paths_with_min_support",
+            cluster=task_cluster,
+            min_support=min_support,
+        )
+        return []
+    candidates = supported
 
     # Pareto front
     pareto = compute_pareto_front(candidates)

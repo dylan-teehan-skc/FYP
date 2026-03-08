@@ -7,10 +7,41 @@ import asyncio
 from fastapi import APIRouter, HTTPException, Request
 
 from collector.logger import get_logger
-from collector.models import EventOut, TraceOut, WorkflowCompleteIn
+from collector.models import (
+    EventOut,
+    TraceOut,
+    WorkflowCompleteIn,
+    WorkflowListOut,
+    WorkflowSummary,
+)
 
 log = get_logger("collector.routes.workflows")
 router = APIRouter()
+
+
+def _fopt(value: object, default: float | None = None) -> float | None:
+    return float(value) if value is not None else default
+
+
+@router.get("/workflows/active")
+async def list_active_workflows(request: Request) -> WorkflowListOut:
+    """Return workflows that are currently in progress (started but not completed/failed)."""
+    db = request.app.state.db
+    data = await db.list_active_workflows()
+    workflows = [
+        WorkflowSummary(
+            workflow_id=row["workflow_id"],
+            task_description=row.get("task_description"),
+            status=row["status"],
+            duration_ms=_fopt(row.get("duration_ms")),
+            steps=row.get("steps"),
+            mode="guided" if row.get("is_guided") else "exploration",
+            timestamp=row["timestamp"],
+        )
+        for row in data["workflows"]
+    ]
+    log.info("list_active_workflows", count=len(workflows))
+    return WorkflowListOut(workflows=workflows, total=data["total"])
 
 
 @router.post("/workflows/complete")

@@ -101,6 +101,21 @@ class TestRunAnalysisForCluster:
         if result.optimal_path:
             mock_db.upsert_optimal_path.assert_called_once()
 
+    async def test_skip_upsert_prevents_db_write(self) -> None:
+        mock_db = MockAnalysisDatabase()
+        mock_db.fetch_workflow_events = AsyncMock(return_value=_sample_events())
+
+        settings = Settings(
+            database_url="postgresql://test:test@localhost/test",
+        )
+
+        result = await run_analysis_for_cluster(
+            mock_db, "refund", ["wf-1"], settings, skip_upsert=True,
+        )
+        # Even if an optimal path was found, upsert should NOT be called
+        mock_db.upsert_optimal_path.assert_not_called()
+        assert result.task_cluster == "refund"
+
 
 class TestRunAnalysis:
     @patch("analysis.pipeline.generate_cluster_name")
