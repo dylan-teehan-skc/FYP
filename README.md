@@ -257,7 +257,7 @@ The same pattern applies to any framework — CrewAI, AutoGen, OpenAI Agents SDK
 | **Database** | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL_16-4169E1?style=flat-square&logo=postgresql&logoColor=white) pgvector (VECTOR(768), HNSW indexes) |
 | **Frontend** | ![Next.js](https://img.shields.io/badge/Next.js_14-000000?style=flat-square&logo=nextdotjs&logoColor=white) ![React](https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black) ![Tailwind](https://img.shields.io/badge/Tailwind-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white) ReactFlow, Recharts |
 | **Analysis** | ![PM4Py](https://img.shields.io/badge/PM4Py-FF6F00?style=flat-square) networkx, pandas, pgvector |
-| **Testing** | ![pytest](https://img.shields.io/badge/pytest-0A9EDC?style=flat-square&logo=pytest&logoColor=white) 362 tests, 90%+ coverage, ruff linting |
+| **Testing** | ![pytest](https://img.shields.io/badge/pytest-0A9EDC?style=flat-square&logo=pytest&logoColor=white) pytest-asyncio, ruff |
 | **CI/CD** | ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white) lint + test on every push |
 
 ## Research-Informed Design
@@ -294,17 +294,6 @@ The platform design is grounded in academic literature:
 ### LangChain Integration
 
 Single-agent and multi-agent (LangGraph supervisor) demos validating framework-agnostic design.
-
-## Tests
-
-```bash
-cd sdk                  && .venv/bin/python -m pytest tests/ -v   # 57 tests, 99% coverage
-cd platform/collector   && .venv/bin/python -m pytest tests/ -v   # 129 tests, 97% coverage
-cd platform/analysis    && .venv/bin/python -m pytest tests/ -v   # 131 tests, 92% coverage
-cd demo/agent-runtime   && .venv/bin/python -m pytest tests/ -v   # 59 tests
-cd demo/mcp-tool-server && .venv/bin/python -m pytest tests/ -v   # 54 tests
-cd demo/langchain       && .venv/bin/python -m pytest tests/ -v   # 35 tests
-```
 
 ## Limitations
 
