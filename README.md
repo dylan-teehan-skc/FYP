@@ -26,17 +26,6 @@
 
 > **Add 2 lines of code. Every workflow gets captured, analysed, and optimised automatically.**
 
-## Key Results
-
-| Metric | Improvement |
-|--------|------------|
-| Execution Duration | **-64%** |
-| Tool-Call Steps | **-53%** |
-| LLM Inference Cost | **-66%** |
-| Task Success Rate | **+45%** |
-
-<sub>Guided mode vs exploration mode, Phase 5 with ground-truth verification across 166 workflows.</sub>
-
 ## How It Works
 
 ```
