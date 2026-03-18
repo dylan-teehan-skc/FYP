@@ -1,139 +1,198 @@
-# Self-Optimising Workflow Intelligence Platform
+<p align="center">
+  <h1 align="center">Self-Optimising Workflow Intelligence Platform</h1>
+  <p align="center">
+    A decoupled observability and optimisation platform for AI agent workflows.<br/>
+    Captures execution traces, discovers optimal paths, feeds knowledge back at runtime.
+  </p>
+</p>
 
-A decoupled observability and optimisation platform for AI agent workflows. Captures execution traces, discovers optimal tool-call sequences via process mining and Pareto-optimal path selection, and feeds that knowledge back to agents at runtime so they improve over time.
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI"/>
+  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL"/>
+  <img src="https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white" alt="Next.js"/>
+  <img src="https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React"/>
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"/>
+</p>
 
-**Add 2 lines of code. Every workflow is captured, analysed, and optimised automatically.**
+<p align="center">
+  <img src="https://img.shields.io/badge/tests-362_passing-brightgreen?style=flat-square" alt="Tests"/>
+  <img src="https://img.shields.io/badge/coverage-90%25+-brightgreen?style=flat-square" alt="Coverage"/>
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"/>
+  <img src="https://img.shields.io/badge/LLM-Gemini_2.5_Flash-4285F4?style=flat-square&logo=google&logoColor=white" alt="Gemini"/>
+</p>
+
+---
+
+> **Add 2 lines of code. Every workflow gets captured, analysed, and optimised automatically.**
+
+## Key Results
+
+| Metric | Improvement |
+|--------|------------|
+| Execution Duration | **-64%** |
+| Tool-Call Steps | **-53%** |
+| LLM Inference Cost | **-66%** |
+| Task Success Rate | **+45%** |
+
+<sub>Guided mode vs exploration mode, Phase 5 with ground-truth verification across 166 workflows.</sub>
 
 ## How It Works
 
-1. Agent starts a task (e.g. "Handle refund for order ORD-5001")
-2. SDK asks: "Any known optimal path for this?" (semantic search via pgvector)
-3. If yes, agent gets guidance (guided mode). If no, agent runs freely (exploration mode)
-4. SDK auto-captures every tool call, latency, cost, success/failure
-5. Events stream to the collector and are stored in PostgreSQL + pgvector
-6. Analysis engine clusters workflows, builds execution graphs, and discovers Pareto-optimal paths
-7. Next time a similar task comes in, guided mode kicks in
-8. System improves with every run, no manual tuning needed
+```
+   New Task ──► Optimal path in DB? ──Yes──► Guided Mode (inject hint) ──► Task Complete
+                        │
+                       No
+                        │
+                 Exploration Mode
+                        │
+              Agent executes freely
+                        │
+              SDK captures all events
+                        │
+              Analysis engine discovers
+              optimal paths via PM4Py +
+              Pareto front selection
+                        │
+                  Saves to DB ──► Next similar task gets guided mode
+```
+
+1. **Agent starts a task** — e.g. "Handle refund for order ORD-5001"
+2. **SDK queries for guidance** — semantic search via pgvector cosine similarity
+3. **Exploration mode** — no known path, agent runs freely, SDK captures every tool call
+4. **Guided mode** — optimal path found, injected as a soft constraint into the LLM prompt
+5. **Analysis engine** — clusters workflows, builds execution graphs, discovers Pareto-optimal paths
+6. **Self-improving** — system gets better with every run, no manual tuning
 
 ## Repository Structure
 
 ```
-sdk/                     The product. Self-contained Python SDK (pip installable).
-platform/                Backend services (deployed together).
-  collector/             FastAPI event receiver + pgvector queries.
-  analysis/              Process mining, pattern detection, Pareto-optimal path discovery.
-dashboard/               React/Next.js frontend for visualisation and metrics.
-demo/                    Example consumers (prove the platform works with different frameworks).
-  agent-runtime/         Custom async Python agent system with LLM reasoning.
-  langchain/             LangChain/LangGraph integration demos.
-    single_agent/        Single-agent tool-calling loop via LangChain.
-    multi_agent/         Multi-agent supervisor + specialist graph via LangGraph.
-  mcp-tool-server/       FastAPI mock tools (13 customer support tools).
-public-docs/             Architecture and design documentation.
+sdk/                        Self-contained Python SDK (pip installable)
+platform/
+  collector/                FastAPI event receiver + pgvector semantic search
+  analysis/                 Process mining, clustering, Pareto-optimal path discovery
+dashboard/                  React/Next.js frontend for visualisation and metrics
+demo/
+  agent-runtime/            Custom async Python agent with MCP tool calling
+  fulfillment/              Order fulfillment demo (6 microservices + MCP server)
+  langchain/
+    single_agent/           LangChain single-agent tool-calling loop
+    multi_agent/            LangGraph supervisor + specialist graph
+  mcp-tool-server/          FastAPI MCP tool server (13 customer support tools)
 ```
 
 ## Quick Start
 
 ### Prerequisites
 
-- Python 3.11+
-- Docker (for PostgreSQL 16 + pgvector)
-- A Gemini API key (`GEMINI_API_KEY`) — used for both LLM reasoning and embeddings
-- If you have a local PostgreSQL running on port 5432, stop it first — Docker needs that port:
-  ```bash
-  brew services stop postgresql@17   # or whichever version
-  ```
+- **Python 3.11+**
+- **Docker** — for PostgreSQL 16 + pgvector
+- **Gemini API key** — used for LLM reasoning and embeddings
+- **Node.js 18+** — for the dashboard
 
-### Environment variables
+> If you have a local PostgreSQL on port 5432, stop it first: `brew services stop postgresql@17`
 
-Create a `.env` file in the project root (or export these in your shell):
+### 1. Environment variables
+
+Create a `.env` file in the project root:
 
 ```bash
-# Required — used by agent-runtime (LLM reasoning) and collector/analysis (embeddings)
 GEMINI_API_KEY=your-gemini-api-key-here
 
-# Optional — override the default embedding model
-# EMBEDDING_MODEL=text-embedding-3-small   # requires OPENAI_API_KEY
+# Optional: use OpenAI embeddings instead
+# EMBEDDING_MODEL=text-embedding-3-small
 # OPENAI_API_KEY=your-openai-key-here
 ```
 
-### Install dependencies
-
-Each component has its own virtual environment. Install once before running:
+### 2. Install dependencies
 
 ```bash
 # SDK
 cd sdk && pip install -e ".[dev]"
 
-# Collector
+# Platform
 cd platform/collector && pip install -e ".[dev]"
-
-# MCP Tool Server (uses uv)
-cd demo/mcp-tool-server && uv sync
-
-# Agent Runtime (needs SDK installed first)
-cd demo/agent-runtime && pip install -e ../../sdk && pip install -e ".[dev]"
-
-# LangChain demo (needs SDK installed first)
-cd demo/langchain && pip install -e ../../sdk && pip install -e ".[dev]"
-
-# Analysis Engine
 cd platform/analysis && pip install -e ".[dev]"
 
 # Dashboard
 cd dashboard && npm install
+
+# Demo — Agent Runtime
+cd demo/agent-runtime && pip install -e ../../sdk && pip install -e ".[dev]"
+
+# Demo — MCP Tool Server
+cd demo/mcp-tool-server && uv sync
+
+# Demo — LangChain (optional)
+cd demo/langchain && pip install -e ../../sdk && pip install -e ".[dev]"
 ```
 
-### Run the platform
-
-Run each service in a separate terminal tab:
+### 3. Run the platform
 
 ```bash
-# Tab 1: Start Postgres + pgvector
+# Start Postgres + pgvector
 docker-compose up -d
 
-# Tab 2: Start the collector service (wait for Postgres to be ready)
-cd platform/collector && .venv/bin/collector
-
-# Tab 3: Start the MCP tool server
-cd demo/mcp-tool-server && .venv/bin/python3 main.py
-
-# Tab 4: Start the dashboard
-cd dashboard && npm run dev
-
-# Tab 5: Run the agent-runtime demo (5 scenarios x 3 rounds = 15 workflows)
-cd demo/agent-runtime && PYTHONPATH=. .venv/bin/python3 demo_runner.py --rounds 3
-
-# Or run the LangChain demos instead (7 scenarios x 2 rounds = 14 workflows each)
-cd demo/langchain && PYTHONPATH=. .venv/bin/python3 -m single_agent.main --rounds 2
-cd demo/langchain && PYTHONPATH=. .venv/bin/python3 -m multi_agent.main --rounds 2
-
-# Run analysis to discover optimal paths
-cd platform/analysis && .venv/bin/python -m analysis.pipeline
-
-# Run the demos again — some scenarios now get guided mode
-cd demo/agent-runtime && PYTHONPATH=. .venv/bin/python3 demo_runner.py --rounds 3
+# Start all services (collector, MCP servers, dashboard) in one command
+bash scripts/start-platform.sh
 ```
 
-### Run tests
+Dashboard at [localhost:3000](http://localhost:3000), collector at [localhost:9000](http://localhost:9000).
+
+### 4. Run demos
 
 ```bash
-# All projects
-cd demo/agent-runtime   && .venv/bin/python -m pytest tests/ -v   # 59 tests
-cd demo/mcp-tool-server && .venv/bin/python -m pytest tests/ -v   # 54 tests
-cd demo/langchain       && .venv/bin/python -m pytest tests/ -v   # 35 tests
-cd sdk                  && .venv/bin/python -m pytest tests/ -v   # 57 tests
-cd platform/collector   && .venv/bin/python -m pytest tests/ -v   # 129 tests, 97% coverage
-cd platform/analysis    && .venv/bin/python -m pytest tests/ -v   # 131 tests, 92% coverage
+# Run 8 rounds of fulfillment scenarios with interleaved analysis
+bash scripts/run-demo.sh --rounds 8
+
+# Filter by workflow type
+bash scripts/run-demo.sh --rounds 5 --types fulfilment,exchange
 ```
+
+Each round runs a batch of scenarios followed by the analysis pipeline, so guided mode activates within the same session.
+
+<details>
+<summary><b>Manual approach</b> (run each service in a separate terminal)</summary>
+
+```bash
+# Terminal 1: Collector
+cd platform/collector && .venv/bin/collector
+
+# Terminal 2: MCP tool server
+cd demo/mcp-tool-server && .venv/bin/python3 main.py
+
+# Terminal 3: Dashboard
+cd dashboard && npm run dev
+
+# Terminal 4: Run agent-runtime demo
+cd demo/agent-runtime && PYTHONPATH=. .venv/bin/python3 demo_runner.py --rounds 3
+
+# Run analysis manually
+cd platform/analysis && .venv/bin/python -m analysis.pipeline
+
+# Run again — guided mode kicks in
+cd demo/agent-runtime && PYTHONPATH=. .venv/bin/python3 demo_runner.py --rounds 3
+```
+</details>
+
+### Utility scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/start-platform.sh` | Start all services with one command (Ctrl+C to stop) |
+| `scripts/run-demo.sh` | Run demo rounds with interleaved analysis |
+| `scripts/reset-db.sh` | Reset the database to a clean state |
+| `scripts/reset-paths.sh` | Clear discovered optimal paths (re-enter exploration mode) |
 
 ## Integration
 
-The SDK is framework-agnostic — it knows nothing about LangChain, LangGraph, or any specific agent framework. The entire public API is three things:
+The SDK is **framework-agnostic**. The entire public API is three things:
 
-1. **WorkflowOptimizer** — the client (creates traces, queries for guidance)
-2. **TraceContext** — wraps one workflow execution (async context manager)
-3. **StepContext** — wraps one tool call within a trace
+| API | Purpose |
+|-----|---------|
+| `WorkflowOptimizer` | Client — creates traces, queries for guidance |
+| `TraceContext` | Wraps one workflow execution (async context manager) |
+| `StepContext` | Wraps one tool call within a trace |
 
 ### Direct usage
 
@@ -142,10 +201,12 @@ from workflow_optimizer import WorkflowOptimizer
 
 optimizer = WorkflowOptimizer(endpoint="http://localhost:9000")
 
+# Query for known optimal path
 guidance = await optimizer.get_optimal_path("Handle refund for order ORD-789")
 # Returns: {"mode": "guided", "path": ["check_ticket", ...], "confidence": 0.87}
 # Or:      {"mode": "exploration"}  (not enough data yet)
 
+# Capture execution trace
 async with optimizer.trace("Handle refund for order ORD-789") as trace:
     with trace.step("check_ticket", params={"id": "T-123"}):
         result = await check_ticket("T-123")
@@ -155,9 +216,10 @@ async with optimizer.trace("Handle refund for order ORD-789") as trace:
 
 ### Framework bridges
 
-Each framework needs a thin bridge (~60 lines) that maps its tool-calling mechanism to `trace.step()`. Two patterns are included:
+Each framework needs a thin bridge (~60 lines) that maps its tool-calling mechanism to `trace.step()`:
 
-**Transparent proxy** (agent-runtime) — wraps the tool client so the agent is completely unaware of tracing:
+<details>
+<summary><b>Transparent proxy</b> (agent-runtime) — agent is completely unaware of tracing</summary>
 
 ```python
 class TracingMCPClient:
@@ -167,8 +229,10 @@ class TracingMCPClient:
             step.set_response(result)
             return result
 ```
+</details>
 
-**Callback handler** (LangChain/LangGraph) — hooks into LangChain's built-in callback system:
+<details>
+<summary><b>Callback handler</b> (LangChain/LangGraph) — hooks into LangChain's callback system</summary>
 
 ```python
 class WorkflowOptimizerCallbackHandler(BaseCallbackHandler):
@@ -181,6 +245,7 @@ class WorkflowOptimizerCallbackHandler(BaseCallbackHandler):
         step.set_response(parsed_output)
         step.__exit__(None, None, None)
 ```
+</details>
 
 The same pattern applies to any framework — CrewAI, AutoGen, OpenAI Agents SDK — find where tools are invoked and wrap with `trace.step()`.
 
@@ -188,50 +253,69 @@ The same pattern applies to any framework — CrewAI, AutoGen, OpenAI Agents SDK
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Python 3.11+, FastAPI, asyncio, asyncpg, Pydantic v2, LiteLLM |
-| Database | PostgreSQL 16 + pgvector (VECTOR(768), HNSW indexes) |
-| Frontend | Next.js, React, react-flow, recharts, Tailwind CSS |
-| Analysis | PM4Py (process mining), networkx (DAGs), pgvector (semantic search), pandas |
-| Testing | pytest, pytest-asyncio, pytest-cov, ruff |
+| **Backend** | ![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white) asyncio, asyncpg, Pydantic v2, LiteLLM |
+| **Database** | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL_16-4169E1?style=flat-square&logo=postgresql&logoColor=white) pgvector (VECTOR(768), HNSW indexes) |
+| **Frontend** | ![Next.js](https://img.shields.io/badge/Next.js_14-000000?style=flat-square&logo=nextdotjs&logoColor=white) ![React](https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black) ![Tailwind](https://img.shields.io/badge/Tailwind-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white) ReactFlow, Recharts |
+| **Analysis** | ![PM4Py](https://img.shields.io/badge/PM4Py-FF6F00?style=flat-square) networkx, pandas, pgvector |
+| **Testing** | ![pytest](https://img.shields.io/badge/pytest-0A9EDC?style=flat-square&logo=pytest&logoColor=white) 362 tests, 90%+ coverage, ruff linting |
+| **CI/CD** | ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white) lint + test on every push |
 
 ## Research-Informed Design
 
 The platform design is grounded in academic literature:
 
-**Analysis engine:**
-1. **PM4Py Inductive Miner** for process discovery + conformance checking — replaces raw Directly-Follows Graphs which allow spurious paths (van der Aalst 2019)
-2. **Two-level clustering** — cosine similarity on task embeddings + Levenshtein edit distance on tool sequences (Song et al. 2009)
-3. **Pareto front enumeration** for multi-objective path optimisation on duration, cost, and success rate — weighted Dijkstra can't find non-convex Pareto solutions (Yassa et al. 2023)
+| Component | Approach | Why |
+|-----------|----------|-----|
+| Process Discovery | PM4Py Inductive Miner | DFGs allow spurious paths (van der Aalst 2019) |
+| Trace Clustering | Two-level: cosine similarity + NED | Single-dimension clustering misses pattern differences (Song et al. 2009, Bose & van der Aalst 2009) |
+| Path Optimisation | Pareto front enumeration | Weighted objectives can't find non-convex solutions (Deb et al. 2002) |
+| Guided Mode | Soft constraint injection | Preserves agent autonomy (KnowAgent, Zhu et al. NAACL 2025) |
+| Context Engineering | Comprehensive over concise | Terse summaries lose actionable detail (ACE, Zhang et al. ICLR 2026) |
+| Minimum Observations | n=30 threshold | Bootstrap confidence + agent eval variance (Efron 1993, Bjarnason et al. 2026) |
 
-**SDK integration:**
-4. **Transparent proxy pattern** for zero-refactoring instrumentation — TracingMCPClient wraps the real MCP client without the agent knowing (MCP Proxy Wrapper 2025; Sypherd et al. 2024)
-5. **Soft constraint guidance** — optimal paths injected as context hints, not hard constraints, preserving agent autonomy (KnowAgent, Zhu et al. NAACL 2025)
-6. **AgentBoard progress metrics** — incremental advancement tracking beyond binary success/failure (Ma et al. NeurIPS 2024)
+## Demo Systems
 
-## Demo Scenario
+### Customer Support (NovaTech Electronics)
 
-The demo simulates NovaTech Electronics, a company handling customer support tickets with an LLM-powered agent. Three demo runners exercise the same scenarios through different frameworks:
+15 scenarios across 5 task categories, 13 MCP tools. The primary evaluation demo.
 
-- **Agent Runtime** — custom async Python agent (5 scenarios per round)
-- **LangChain Single-Agent** — LangChain tool-calling loop (7 scenarios per round)
-- **LangChain Multi-Agent** — LangGraph supervisor + specialist graph (7 scenarios per round)
+| Scenario | Type | Optimal Steps |
+|----------|------|:------------:|
+| Eligible Refund | refund_request | 6 |
+| Order Inquiry | order_inquiry | 4-5 |
+| Denied Refund | refund_request | 6 |
+| VIP Complaint | complaint | 6 |
+| Troubleshooting | product_support | 4 |
 
-The core five ticket types exercise different tool combinations:
+### Order Fulfillment
 
-| Scenario | Ticket | Type | Expected Steps |
-|----------|--------|------|---------------|
-| Eligible refund | T-1001 | refund_request | 6 |
-| Order status inquiry | T-1002 | order_inquiry | 4 |
-| Denied refund | T-1003 | refund_request | 6 |
-| VIP complaint | T-1004 | complaint | 6 |
-| Product troubleshooting | T-1005 | product_support | 4 |
+10 scenarios, 6 microservices, multi-warehouse routing with real decision points (backorders, expired returns).
 
-The LangChain demos add two additional error-handling scenarios (invalid ticket, system error) for 7 total per round.
+### LangChain Integration
+
+Single-agent and multi-agent (LangGraph supervisor) demos validating framework-agnostic design.
+
+## Tests
+
+```bash
+cd sdk                  && .venv/bin/python -m pytest tests/ -v   # 57 tests, 99% coverage
+cd platform/collector   && .venv/bin/python -m pytest tests/ -v   # 129 tests, 97% coverage
+cd platform/analysis    && .venv/bin/python -m pytest tests/ -v   # 131 tests, 92% coverage
+cd demo/agent-runtime   && .venv/bin/python -m pytest tests/ -v   # 59 tests
+cd demo/mcp-tool-server && .venv/bin/python -m pytest tests/ -v   # 54 tests
+cd demo/langchain       && .venv/bin/python -m pytest tests/ -v   # 35 tests
+```
 
 ## Limitations
 
-**Embedding model**: The platform currently uses Gemini `gemini-embedding-001` (768-dim, via `dimensions=768`) for semantic search to keep the entire platform on a single API key. OpenAI's `text-embedding-3-small` (1536-dim) is the preferred model — it ranks higher on the MTEB benchmark, and the similarity threshold (0.60) was originally calibrated for its cosine similarity distribution. To switch, set `EMBEDDING_MODEL=text-embedding-3-small` and `OPENAI_API_KEY` in your environment, then run the database migration to upgrade to `VECTOR(1536)`.
+- **Cold start** — no guidance until sufficient exploration data accumulates (min 30 executions per task type)
+- **Embedding model** — currently uses Gemini `gemini-embedding-001` (768-dim) to keep the platform on a single API key. Set `EMBEDDING_MODEL=text-embedding-3-small` + `OPENAI_API_KEY` to switch to OpenAI embeddings
+- **Demo scope** — up to 20 tools across 4 MCP servers; production systems may have hundreds
 
 ## Documentation
 
-- [Architecture](public-docs/architecture.md) - Component descriptions, data flow, database schema
+- [Architecture](public-docs/architecture.md) — component descriptions, data flow, database schema
+
+## License
+
+This project was developed as a Final Year Project at the University of Limerick.
