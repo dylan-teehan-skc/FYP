@@ -273,38 +273,6 @@ The platform design is grounded in academic literature:
 | Context Engineering | Comprehensive over concise | Terse summaries lose actionable detail (ACE, Zhang et al. ICLR 2026) |
 | Minimum Observations | n=30 threshold | Bootstrap confidence + agent eval variance (Efron 1993, Bjarnason et al. 2026) |
 
-## Demo Systems
-
-### Customer Support (NovaTech Electronics)
-
-15 scenarios across 5 task categories, 13 MCP tools. The primary evaluation demo.
-
-| Scenario | Type | Optimal Steps |
-|----------|------|:------------:|
-| Eligible Refund | refund_request | 6 |
-| Order Inquiry | order_inquiry | 4-5 |
-| Denied Refund | refund_request | 6 |
-| VIP Complaint | complaint | 6 |
-| Troubleshooting | product_support | 4 |
-
-### Order Fulfillment
-
-10 scenarios, 6 microservices, multi-warehouse routing with real decision points (backorders, expired returns).
-
-### LangChain Integration
-
-Single-agent and multi-agent (LangGraph supervisor) demos validating framework-agnostic design.
-
-## Limitations
-
-- **Cold start** — no guidance until sufficient exploration data accumulates (min 30 executions per task type)
-- **Embedding model** — currently uses Gemini `gemini-embedding-001` (768-dim) to keep the platform on a single API key. Set `EMBEDDING_MODEL=text-embedding-3-small` + `OPENAI_API_KEY` to switch to OpenAI embeddings
-- **Demo scope** — up to 20 tools across 4 MCP servers; production systems may have hundreds
-
-## Documentation
-
-- [Architecture](public-docs/architecture.md) — component descriptions, data flow, database schema
-
 ## License
 
 This project was developed as a Final Year Project at the University of Limerick.
