@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     embedding_model: str = "gemini/gemini-embedding-001"
     log_level: str = "INFO"
     similarity_threshold: float = 0.85
-    min_executions: int = 5
+    min_executions: int = 30
     regression_margin: float = 0.10
     host: str = "0.0.0.0"
     port: int = 9000

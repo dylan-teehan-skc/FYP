@@ -74,6 +74,9 @@ class OptimalPathOut(BaseModel):
     avg_steps: float | None = None
     success_rate: float | None = None
     execution_count: int | None = None
+    failure_warnings: list[str] | None = None
+    alternative_paths: list[dict] | None = None
+    decision_tree: dict | None = None
 
 
 class EventOut(BaseModel):

@@ -97,6 +97,7 @@ class OptimalPath(BaseModel):
     execution_count: int = 0
     pareto_rank: int = 0
     embedding: list[float] | None = None
+    decision_tree: dict[str, Any] | None = None
 
 
 class Suggestion(BaseModel):

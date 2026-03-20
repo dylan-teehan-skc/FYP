@@ -12,6 +12,8 @@ load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env", override=Fal
 from analysis.clustering import cluster_by_embedding, subcluster_by_trace
 from analysis.config import Settings, get_settings
 from analysis.database import Database
+from analysis.decision_tree import build_decision_tree
+from analysis.failure_warnings import extract_failure_warnings
 from analysis.graph import (
     build_execution_graph,
     compute_quality_metrics,
@@ -46,24 +48,30 @@ async def run_analysis_for_cluster(
     if not traces:
         return AnalysisResult(task_cluster=task_cluster)
 
-    # 2. Discover process model (PM4Py)
+    # Filter to successful traces for graph/optimizer — failed traces
+    # pollute edge success rates and prevent path discovery.
+    successful_traces = [t for t in traces if t.success]
+    if not successful_traces:
+        return AnalysisResult(task_cluster=task_cluster)
+
+    # 2. Discover process model (PM4Py) — uses all traces
     model_result = discover_process_model(traces)
     net, im, fm = model_result if model_result else (None, None, None)
 
-    # 3. Compute quality metrics
+    # 3. Compute quality metrics — uses all traces
     process_metrics = None
     if net is not None:
         process_metrics = compute_quality_metrics(traces, net, im, fm)
 
-    # 4. Build networkx execution graph
-    nx_graph, exec_graph = build_execution_graph(traces, task_cluster)
+    # 4. Build networkx execution graph — successful traces only
+    nx_graph, exec_graph = build_execution_graph(successful_traces, task_cluster)
 
-    # 5. Detect patterns
+    # 5. Detect patterns — uses all traces
     patterns = detect_patterns(traces, net, im, fm, settings=settings)
 
-    # 6. Find Pareto-optimal paths
+    # 6. Find Pareto-optimal paths — successful traces only
     pareto_paths = find_pareto_paths(
-        nx_graph, traces, task_cluster,
+        nx_graph, successful_traces, task_cluster,
         min_success_rate=settings.min_success_rate,
     )
 
@@ -87,9 +95,14 @@ async def run_analysis_for_cluster(
     # 8. Generate suggestions
     suggestions = generate_suggestions(patterns, optimal_path, traces)
 
-    # 9. Upsert optimal path to DB (attach embedding from cluster for similarity search)
-    #    skip_upsert=True for group-level clusters that mix different workflow types —
-    #    only subclusters (separated by NED) should produce paths for the optimizer.
+    # 9. Extract failure warnings (ACE-inspired enriched hints)
+    failure_warnings: list[str] = []
+    if optimal_path:
+        failure_warnings = extract_failure_warnings(traces, optimal_path)
+
+    # 10. Upsert optimal path to DB (attach embedding from cluster for similarity search)
+    #     skip_upsert=True for group-level clusters that mix different workflow types —
+    #     only subclusters (separated by NED) should produce paths for the optimizer.
     if optimal_path and not skip_upsert:
         if not optimal_path.embedding and workflow_ids:
             optimal_path.embedding = await db.fetch_centroid_embedding(workflow_ids)
@@ -105,6 +118,7 @@ async def run_analysis_for_cluster(
             "embedding": optimal_path.embedding,
             "guided_success_rate": mode_rates["guided"],
             "exploration_success_rate": mode_rates["exploration"],
+            "failure_warnings": failure_warnings,
         })
 
     log.info(
@@ -172,6 +186,10 @@ async def run_analysis(
             traces, ned_threshold=settings.ned_threshold
         )
 
+        # Analyze each subcluster without upserting — we pick the best path
+        # across all subclusters below to avoid outcome-variant collisions
+        # (e.g. short "not applicable" paths beating longer complete workflows).
+        sub_results = []
         for sub_label, sub_traces in subclusters.items():
             sub_wf_ids = [t.workflow_id for t in sub_traces]
             full_label = cluster_name
@@ -179,12 +197,67 @@ async def run_analysis(
                 full_label = f"{cluster_name} ({sub_label})"
 
             result = await run_analysis_for_cluster(
-                db, full_label, sub_wf_ids, settings
+                db, full_label, sub_wf_ids, settings, skip_upsert=True,
             )
+            sub_results.append(result)
             results.append(result)
 
-        # Group-level analysis for dashboard metrics (no optimal path upsert —
-        # parent clusters mix different workflow types and produce wrong paths).
+        # Upsert one optimal path per semantic cluster with alternative
+        # variant paths. Primary = largest subcluster (most representative).
+        # Alternatives = all other subclusters' paths. At runtime the agent
+        # sees all variants as a decision tree and picks the right one
+        # based on what it discovers during execution.
+        paired = [
+            (r.optimal_path, len(sub_traces))
+            for r, sub_traces in zip(sub_results, subclusters.values())
+            if r.optimal_path
+        ]
+        if paired:
+            paired.sort(key=lambda pair: pair[1], reverse=True)
+            best, _ = paired[0]
+            alternatives = [
+                {
+                    "tool_sequence": p.tool_sequence,
+                    "execution_count": count,
+                    "success_rate": p.success_rate,
+                    "avg_steps": p.avg_steps,
+                }
+                for p, count in paired[1:]
+            ]
+            all_wf_ids = [
+                t.workflow_id
+                for sub in subclusters.values()
+                for t in sub
+            ]
+            best.embedding = await db.fetch_centroid_embedding(all_wf_ids)
+            mode_rates = await db.fetch_mode_success_rates(all_wf_ids)
+            all_traces = [t for sub in subclusters.values() for t in sub]
+            warnings = extract_failure_warnings(all_traces, best)
+            decision_tree = build_decision_tree(subclusters)
+            await db.upsert_optimal_path({
+                "path_id": best.path_id,
+                "task_cluster": cluster_name,
+                "tool_sequence": best.tool_sequence,
+                "avg_duration_ms": best.avg_duration_ms,
+                "avg_steps": best.avg_steps,
+                "success_rate": best.success_rate,
+                "execution_count": len(all_wf_ids),
+                "embedding": best.embedding,
+                "guided_success_rate": mode_rates["guided"],
+                "exploration_success_rate": mode_rates["exploration"],
+                "failure_warnings": warnings,
+                "alternative_paths": alternatives,
+                "decision_tree": decision_tree,
+            })
+            log.info(
+                "best_variant_upserted",
+                cluster=cluster_name,
+                subclusters=len(subclusters),
+                primary_steps=best.avg_steps,
+                alternatives=len(alternatives),
+            )
+
+        # Group-level analysis for dashboard metrics (no optimal path upsert).
         all_wf_ids = [str(wf) for wf in cluster_result.workflow_ids]
         group_result = await run_analysis_for_cluster(
             db, cluster_name, all_wf_ids, settings, skip_upsert=True,

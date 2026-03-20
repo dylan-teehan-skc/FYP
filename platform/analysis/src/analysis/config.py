@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # Analysis tuning
     similarity_threshold: float = 0.78
     min_success_rate: float = 0.85
-    min_executions: int = 3
+    min_executions: int = 5
     bottleneck_threshold_pct: float = 0.40
     redundancy_min_calls: int = 2
     ned_threshold: float = 0.55

@@ -88,6 +88,32 @@ class TestBuildGuidedContext:
         assert "1. tool_a" in result
         assert "2. tool_b" in result
 
+    def test_guided_with_failure_warnings(self) -> None:
+        response = OptimalPathResponse(
+            mode="guided",
+            path=["check_ticket", "process_return", "submit_fulfilment"],
+            success_rate=0.92,
+            execution_count=45,
+            failure_warnings=[
+                "submit_fulfilment was missing in 8/17 failed runs",
+                "at list_warehouses, successful runs used warehouse=west",
+            ],
+        )
+        result = build_guided_context(response)
+        assert "KNOWN FAILURE MODES" in result
+        assert "submit_fulfilment was missing" in result
+        assert "warehouse=west" in result
+
+    def test_guided_no_failure_warnings(self) -> None:
+        response = OptimalPathResponse(
+            mode="guided",
+            path=["tool_a", "tool_b"],
+            success_rate=0.90,
+            execution_count=10,
+        )
+        result = build_guided_context(response)
+        assert "KNOWN FAILURE MODES" not in result
+
 
 # ---------------------------------------------------------------------------
 # TracingReasoningEngine

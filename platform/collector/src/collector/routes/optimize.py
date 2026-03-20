@@ -77,4 +77,7 @@ async def optimize_path(body: OptimizePathIn, request: Request) -> OptimalPathOu
         avg_steps=match["avg_steps"],
         success_rate=match["success_rate"],
         execution_count=match["execution_count"],
+        failure_warnings=match["failure_warnings"] or None,
+        alternative_paths=match["alternative_paths"] or None,
+        decision_tree=match["decision_tree"] or None,
     )

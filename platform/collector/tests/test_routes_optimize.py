@@ -44,6 +44,9 @@ class TestOptimizePath:
             "similarity": 0.95,
             "guided_success_rate": None,
             "exploration_success_rate": None,
+            "failure_warnings": None,
+            "alternative_paths": None,
+            "decision_tree": None,
         })
         response = await client.post(
             "/optimize/path", json={"task_description": "Handle refund for ORD-789"}
@@ -55,6 +58,38 @@ class TestOptimizePath:
         assert data["confidence"] == 0.95
         assert data["success_rate"] == 0.95
         assert data["execution_count"] == 15
+        assert data["failure_warnings"] is None
+
+    async def test_guided_mode_with_failure_warnings(
+        self, client: AsyncClient, mock_db: MockDatabase,
+    ) -> None:
+        """Failure warnings are passed through from DB to response."""
+        mock_db.find_similar_paths = AsyncMock(return_value={
+            "tool_sequence": ["check_ticket", "get_order", "process_refund"],
+            "avg_duration_ms": 2500.0,
+            "avg_steps": 6.0,
+            "success_rate": 0.95,
+            "execution_count": 15,
+            "similarity": 0.95,
+            "guided_success_rate": None,
+            "exploration_success_rate": None,
+            "failure_warnings": [
+                "submit_fulfilment was missing in 8/17 failed runs",
+                "at list_warehouses, successful runs used warehouse=west",
+            ],
+            "alternative_paths": None,
+            "decision_tree": None,
+        })
+        response = await client.post(
+            "/optimize/path", json={"task_description": "Handle exchange"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["mode"] == "guided"
+        assert data["failure_warnings"] == [
+            "submit_fulfilment was missing in 8/17 failed runs",
+            "at list_warehouses, successful runs used warehouse=west",
+        ]
 
     async def test_exploration_when_below_threshold(
         self, client: AsyncClient, mock_db: MockDatabase,
@@ -68,6 +103,9 @@ class TestOptimizePath:
             "similarity": 0.45,
             "guided_success_rate": None,
             "exploration_success_rate": None,
+            "failure_warnings": None,
+            "alternative_paths": None,
+            "decision_tree": None,
         })
         response = await client.post(
             "/optimize/path", json={"task_description": "Unknown task"}
@@ -88,6 +126,9 @@ class TestOptimizePath:
             "similarity": 0.95,
             "guided_success_rate": 0.60,
             "exploration_success_rate": 0.90,
+            "failure_warnings": None,
+            "alternative_paths": None,
+            "decision_tree": None,
         })
         response = await client.post(
             "/optimize/path", json={"task_description": "Handle refund"}
@@ -108,6 +149,9 @@ class TestOptimizePath:
             "similarity": 0.95,
             "guided_success_rate": None,
             "exploration_success_rate": None,
+            "failure_warnings": None,
+            "alternative_paths": None,
+            "decision_tree": None,
         })
         response = await client.post(
             "/optimize/path", json={"task_description": "Handle refund"}
@@ -128,6 +172,9 @@ class TestOptimizePath:
             "similarity": 0.95,
             "guided_success_rate": 0.85,
             "exploration_success_rate": 0.90,
+            "failure_warnings": None,
+            "alternative_paths": None,
+            "decision_tree": None,
         })
         response = await client.post(
             "/optimize/path", json={"task_description": "Handle refund"}
