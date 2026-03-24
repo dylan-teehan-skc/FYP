@@ -249,19 +249,6 @@ The same pattern applies to any framework — CrewAI, AutoGen, OpenAI Agents SDK
 | **Testing** | ![pytest](https://img.shields.io/badge/pytest-0A9EDC?style=flat-square&logo=pytest&logoColor=white) pytest-asyncio, ruff |
 | **CI/CD** | ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white) lint + test on every push |
 
-## Research-Informed Design
-
-The platform design is grounded in academic literature:
-
-| Component | Approach | Why |
-|-----------|----------|-----|
-| Process Discovery | PM4Py Inductive Miner | DFGs allow spurious paths (van der Aalst 2019) |
-| Trace Clustering | Two-level: cosine similarity + NED | Single-dimension clustering misses pattern differences (Song et al. 2009, Bose & van der Aalst 2009) |
-| Path Optimisation | Pareto front enumeration | Weighted objectives can't find non-convex solutions (Deb et al. 2002) |
-| Guided Mode | Soft constraint injection | Preserves agent autonomy (KnowAgent, Zhu et al. NAACL 2025) |
-| Context Engineering | Comprehensive over concise | Terse summaries lose actionable detail (ACE, Zhang et al. ICLR 2026) |
-| Minimum Observations | n=30 threshold | Bootstrap confidence + agent eval variance (Efron 1993, Bjarnason et al. 2026) |
-
 ## License
 
 This project was developed as a Final Year Project at the University of Limerick.
