@@ -54,6 +54,7 @@ def make_event(
         agent_name=kwargs.get("agent_name", "agent"),
         agent_role=kwargs.get("agent_role", "triage"),
         tool_name=tool_name,
+        tool_parameters=kwargs.get("tool_parameters", {}),
         duration_ms=duration_ms,
         cost_usd=cost_usd,
         status=status,

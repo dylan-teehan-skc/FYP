@@ -17,7 +17,7 @@ class TestSettings:
         s = Settings()
         assert s.similarity_threshold == 0.78
         assert s.min_success_rate == 0.85
-        assert s.min_executions == 3
+        assert s.min_executions == 5
         assert s.bottleneck_threshold_pct == 0.40
         assert s.redundancy_min_calls == 2
         assert s.ned_threshold == 0.55
@@ -26,11 +26,11 @@ class TestSettings:
         s = Settings(
             database_url="postgresql://custom:custom@db/test",
             min_success_rate=0.70,
-            min_executions=5,
+            min_executions=10,
         )
         assert s.database_url == "postgresql://custom:custom@db/test"
         assert s.min_success_rate == 0.70
-        assert s.min_executions == 5
+        assert s.min_executions == 10
 
     def test_get_settings_factory(self) -> None:
         s = get_settings()

@@ -37,7 +37,7 @@ PYTHONPATH=. .venv/bin/python3 -m inventory_server.main &
 # --- Collector API (port 9000) ---
 echo "Starting collector (9000)..."
 cd "$ROOT/platform/collector"
-.venv/bin/python3 -c "from collector.app import run; run()" &
+SIMILARITY_THRESHOLD=${SIMILARITY_THRESHOLD:-0.85} MIN_EXECUTIONS=${MIN_EXECUTIONS:-30} REGRESSION_MARGIN=${REGRESSION_MARGIN:-0.10} .venv/bin/python3 -c "from collector.app import run; run()" &
 
 # --- Dashboard (port 3000) ---
 echo "Starting dashboard (3000)..."

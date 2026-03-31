@@ -130,8 +130,8 @@ def submit_fulfilment(arguments: dict) -> dict:
     order_id = arguments.get("order_id")
     subtotal = arguments.get("subtotal")
     shipping_cost = arguments.get("shipping_cost")
-    discount_pct = arguments.get("discount_pct", 0)
-    promotion_discount = arguments.get("promotion_discount", 0)
+    discount_pct = arguments.get("discount_pct") or 0
+    promotion_discount = arguments.get("promotion_discount") or 0
     total = arguments.get("total")
     delivery_days = arguments.get("delivery_days")
 

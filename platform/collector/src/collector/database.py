@@ -158,7 +158,7 @@ class Database:
     async def find_similar_paths(
         self,
         embedding: list[float],
-        min_executions: int = 5,
+        min_executions: int = 30,
         min_success_rate: float = 0.85,
     ) -> asyncpg.Record | None:
         """Semantic search for optimal path using pgvector cosine similarity."""
@@ -167,6 +167,7 @@ class Database:
                 tool_sequence, avg_duration_ms, avg_steps,
                 success_rate, execution_count,
                 guided_success_rate, exploration_success_rate,
+                failure_warnings, alternative_paths, decision_tree,
                 1 - (embedding <=> $1::vector) AS similarity
             FROM optimal_paths
             WHERE execution_count >= $2
@@ -190,7 +191,8 @@ class Database:
                 AVG(step_number) FILTER (WHERE activity
                     IN ('workflow:complete', 'workflow:fail')) AS avg_steps,
                 AVG(CASE WHEN status = 'success' THEN 1.0 ELSE 0.0 END)
-                    FILTER (WHERE activity LIKE 'workflow:%%') AS success_rate
+                    FILTER (WHERE activity IN ('workflow:complete', 'workflow:fail'))
+                    AS success_rate
             FROM event_logs
             """
         )

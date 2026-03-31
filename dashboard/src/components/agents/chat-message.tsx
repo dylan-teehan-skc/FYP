@@ -66,7 +66,13 @@ function StatusIcon({ status }: { status: string }) {
 
 /** Extract the guided context block from an LLM prompt string. */
 function extractGuidedContext(prompt: string): string | null {
-  const markers = ["OPTIMIZATION HINT:", "RECOMMENDED PATH:"];
+  const markers = [
+    "OPTIMIZATION HINT —",
+    "OPTIMIZATION HINT:",
+    "RECOMMENDED PATH:",
+    "IMPORTANT — VALIDATED OPTIMAL PATH:",
+    "VALIDATED PATHS for this task type:",
+  ];
   let idx = -1;
   for (const m of markers) {
     idx = prompt.indexOf(m);
@@ -162,12 +168,21 @@ export function ChatMessage({ event, allEvents }: ChatMessageProps) {
       ? extractGuidedContext(firstToolCall.llm_prompt)
       : null;
 
+    const isDecisionTree =
+      guidedContext?.includes("├──") || guidedContext?.includes("└──");
+    const headerText = isDecisionTree
+      ? "Guided Mode — Decision Tree Injected"
+      : "Guided Mode — Optimal Path Injected";
+    const sectionLabel = isDecisionTree
+      ? "Injected Decision Tree"
+      : "Injected Optimal Path";
+
     return (
       <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
         <div className="flex items-center gap-2">
           <Zap className="h-3.5 w-3.5 text-emerald-400" />
           <span className="text-xs font-medium text-emerald-400">
-            Guided Mode — Optimal Path Injected
+            {headerText}
           </span>
           <Badge
             variant="outline"
@@ -178,7 +193,7 @@ export function ChatMessage({ event, allEvents }: ChatMessageProps) {
         </div>
         {guidedContext && (
           <CollapsibleSection
-            label="Injected Optimal Path"
+            label={sectionLabel}
             icon={Route}
             defaultOpen
           >

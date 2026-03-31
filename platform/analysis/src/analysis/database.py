@@ -189,8 +189,10 @@ class Database:
                     """INSERT INTO optimal_paths
                         (path_id, task_cluster, tool_sequence, avg_duration_ms,
                          avg_steps, success_rate, execution_count, embedding,
-                         guided_success_rate, exploration_success_rate, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+                         guided_success_rate, exploration_success_rate,
+                         failure_warnings, alternative_paths, decision_tree,
+                         updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
                     """,
                     UUID(path["path_id"]),
                     path["task_cluster"],
@@ -202,5 +204,8 @@ class Database:
                     str(path["embedding"]) if path.get("embedding") else None,
                     path.get("guided_success_rate"),
                     path.get("exploration_success_rate"),
+                    path.get("failure_warnings", []),
+                    path.get("alternative_paths", []),
+                    path.get("decision_tree"),
                 )
         log.info("optimal_path_upserted", task_cluster=path["task_cluster"])

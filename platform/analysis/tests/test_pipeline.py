@@ -117,6 +117,24 @@ class TestRunAnalysisForCluster:
         assert result.task_cluster == "refund"
 
 
+    async def test_all_failed_traces_returns_empty(self) -> None:
+        mock_db = MockAnalysisDatabase()
+        fail_events = _sample_events()
+        fail_events[1]["activity"] = "workflow:fail"
+        fail_events[1]["status"] = "error"
+        mock_db.fetch_workflow_events = AsyncMock(return_value=fail_events)
+
+        settings = Settings(
+            database_url="postgresql://test:test@localhost/test",
+        )
+        result = await run_analysis_for_cluster(
+            mock_db, "refund", ["wf-1"], settings
+        )
+        assert result.task_cluster == "refund"
+        # No successful traces → no optimal path
+        assert result.optimal_path is None
+
+
 class TestRunAnalysis:
     @patch("analysis.pipeline.generate_cluster_name")
     @patch("analysis.pipeline.cluster_by_embedding")

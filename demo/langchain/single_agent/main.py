@@ -147,6 +147,10 @@ def build_guided_context(response: OptimalPathResponse) -> str:
         "Execute tools in this order. Skip any tool that already "
         "shows [SUCCESS] in your execution history."
     )
+    if response.failure_warnings:
+        parts.append("\nKNOWN FAILURE MODES:")
+        for warning in response.failure_warnings:
+            parts.append(f"- {warning}")
     return "\n".join(parts)
 
 

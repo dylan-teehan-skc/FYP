@@ -106,6 +106,101 @@ class TestReadQueries:
         assert result is None
 
 
+class TestCentroidEmbedding:
+    _UUID1 = "550e8400-e29b-41d4-a716-446655440000"
+    _UUID2 = "550e8400-e29b-41d4-a716-446655440001"
+
+    def _make_db(self) -> Database:
+        db = Database(dsn="postgresql://test:test@localhost/test")
+        db._pool = AsyncMock()
+        return db
+
+    async def test_returns_centroid(self) -> None:
+        db = self._make_db()
+        db._pool.fetch = AsyncMock(return_value=[
+            {"embedding": [1.0, 0.0]},
+            {"embedding": [0.0, 1.0]},
+        ])
+        result = await db.fetch_centroid_embedding([self._UUID1, self._UUID2])
+        assert result == [0.5, 0.5]
+
+    async def test_empty_ids(self) -> None:
+        db = self._make_db()
+        result = await db.fetch_centroid_embedding([])
+        assert result is None
+
+    async def test_no_rows(self) -> None:
+        db = self._make_db()
+        db._pool.fetch = AsyncMock(return_value=[])
+        result = await db.fetch_centroid_embedding([self._UUID1])
+        assert result is None
+
+    async def test_null_embeddings_skipped(self) -> None:
+        db = self._make_db()
+        db._pool.fetch = AsyncMock(return_value=[
+            {"embedding": None},
+            {"embedding": [1.0, 2.0]},
+        ])
+        result = await db.fetch_centroid_embedding([self._UUID1, self._UUID2])
+        assert result == [1.0, 2.0]
+
+    async def test_all_null_embeddings(self) -> None:
+        db = self._make_db()
+        db._pool.fetch = AsyncMock(return_value=[
+            {"embedding": None},
+        ])
+        result = await db.fetch_centroid_embedding([self._UUID1])
+        assert result is None
+
+    async def test_string_embeddings(self) -> None:
+        db = self._make_db()
+        db._pool.fetch = AsyncMock(return_value=[
+            {"embedding": "[1.0,0.0]"},
+            {"embedding": "[0.0,1.0]"},
+        ])
+        result = await db.fetch_centroid_embedding([self._UUID1, self._UUID2])
+        assert result == [0.5, 0.5]
+
+
+class TestModeSuccessRates:
+    _UUID1 = "550e8400-e29b-41d4-a716-446655440000"
+
+    def _make_db(self) -> Database:
+        db = Database(dsn="postgresql://test:test@localhost/test")
+        db._pool = AsyncMock()
+        return db
+
+    async def test_returns_rates(self) -> None:
+        db = self._make_db()
+        db._pool.fetch = AsyncMock(return_value=[
+            {"is_guided": 1, "success_rate": 0.85},
+            {"is_guided": 0, "success_rate": 0.60},
+        ])
+        result = await db.fetch_mode_success_rates([self._UUID1])
+        assert result == {"guided": 0.85, "exploration": 0.60}
+
+    async def test_empty_ids(self) -> None:
+        db = self._make_db()
+        result = await db.fetch_mode_success_rates([])
+        assert result == {"guided": None, "exploration": None}
+
+    async def test_only_exploration(self) -> None:
+        db = self._make_db()
+        db._pool.fetch = AsyncMock(return_value=[
+            {"is_guided": 0, "success_rate": 0.70},
+        ])
+        result = await db.fetch_mode_success_rates([self._UUID1])
+        assert result == {"guided": None, "exploration": 0.70}
+
+
+class TestClearOptimalPaths:
+    async def test_clears(self) -> None:
+        db = Database(dsn="postgresql://test:test@localhost/test")
+        db._pool = AsyncMock()
+        await db.clear_optimal_paths()
+        db._pool.execute.assert_called_once_with("DELETE FROM optimal_paths")
+
+
 class TestWriteQueries:
     def _make_db(self) -> Database:
         db = Database(dsn="postgresql://test:test@localhost/test")

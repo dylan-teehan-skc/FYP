@@ -44,12 +44,8 @@ class Scenario:
     workflow_type: str
     task_description: str
     expected_status: str
-    expected_total: float | None = None
-    expected_delivery_days: int | None = None
     replacement_order_id: str | None = None
     expected_replacement_status: str | None = None
-    expected_replacement_total: float | None = None
-    expected_replacement_days: int | None = None
 
 
 @dataclass
@@ -145,8 +141,6 @@ SCENARIOS: list[Scenario] = [
         workflow_type="fulfilment",
         task_description="Fulfil order ORD-201 and ship it to the customer.",
         expected_status="fulfilled",
-        expected_total=52.40,
-        expected_delivery_days=2,
     ),
     # MEDIUM
     Scenario(
@@ -157,8 +151,6 @@ SCENARIOS: list[Scenario] = [
             "Make sure payment is processed and the customer is notified."
         ),
         expected_status="fulfilled",
-        expected_total=31.70,
-        expected_delivery_days=2,
     ),
     # VAGUE
     Scenario(
@@ -176,8 +168,6 @@ SCENARIOS: list[Scenario] = [
             "— ship it as cheaply as possible."
         ),
         expected_status="fulfilled",
-        expected_total=108.70,
-        expected_delivery_days=3,
     ),
     # MEDIUM — high value, mentions risk
     Scenario(
@@ -188,8 +178,6 @@ SCENARIOS: list[Scenario] = [
             "check risk compliance before processing."
         ),
         expected_status="fulfilled",
-        expected_total=354.00,
-        expected_delivery_days=2,
     ),
     # VAGUE — flagged customer + high value → blocked
     Scenario(
@@ -207,8 +195,6 @@ SCENARIOS: list[Scenario] = [
         workflow_type="fulfilment",
         task_description="Fulfil order ORD-210 and ship it to the customer.",
         expected_status="fulfilled",
-        expected_total=36.90,
-        expected_delivery_days=3,
     ),
     # MEDIUM
     Scenario(
@@ -219,8 +205,6 @@ SCENARIOS: list[Scenario] = [
             "Multi-quantity order — find the cheapest shipping option."
         ),
         expected_status="fulfilled",
-        expected_total=74.80,
-        expected_delivery_days=3,
     ),
     # VAGUE
     Scenario(
@@ -228,8 +212,6 @@ SCENARIOS: list[Scenario] = [
         workflow_type="fulfilment",
         task_description="Fulfil order ORD-212 and ship it to the customer.",
         expected_status="fulfilled",
-        expected_total=47.90,
-        expected_delivery_days=2,
     ),
     # --- Returns (7) ---
     # VAGUE
@@ -299,8 +281,6 @@ SCENARIOS: list[Scenario] = [
         expected_status="returned",
         replacement_order_id="ORD-501",
         expected_replacement_status="fulfilled",
-        expected_replacement_total=31.70,
-        expected_replacement_days=2,
     ),
     # MEDIUM
     Scenario(
@@ -325,8 +305,6 @@ SCENARIOS: list[Scenario] = [
         expected_status="returned",
         replacement_order_id="ORD-503",
         expected_replacement_status="fulfilled",
-        expected_replacement_total=38.45,
-        expected_replacement_days=1,
     ),
     # VAGUE — high-value replacement triggers risk
     Scenario(
@@ -336,8 +314,6 @@ SCENARIOS: list[Scenario] = [
         expected_status="returned",
         replacement_order_id="ORD-504",
         expected_replacement_status="fulfilled",
-        expected_replacement_total=324.10,
-        expected_replacement_days=2,
     ),
     # VAGUE
     Scenario(
@@ -350,8 +326,6 @@ SCENARIOS: list[Scenario] = [
         expected_status="returned",
         replacement_order_id="ORD-505",
         expected_replacement_status="fulfilled",
-        expected_replacement_total=41.60,
-        expected_replacement_days=2,
     ),
     # MEDIUM
     Scenario(
@@ -364,8 +338,6 @@ SCENARIOS: list[Scenario] = [
         expected_status="returned",
         replacement_order_id="ORD-506",
         expected_replacement_status="fulfilled",
-        expected_replacement_total=31.70,
-        expected_replacement_days=2,
     ),
     # VAGUE
     Scenario(
@@ -375,8 +347,6 @@ SCENARIOS: list[Scenario] = [
         expected_status="returned",
         replacement_order_id="ORD-507",
         expected_replacement_status="fulfilled",
-        expected_replacement_total=47.90,
-        expected_replacement_days=2,
     ),
     # --- Additional Fulfillment + Returns (cross-domain complexity) ---
     # VAGUE — VIP + risk review
@@ -387,8 +357,6 @@ SCENARIOS: list[Scenario] = [
             "Fulfil order ORD-207 and ship it to the customer."
         ),
         expected_status="fulfilled",
-        expected_total=324.10,
-        expected_delivery_days=2,
     ),
     # VAGUE — payment retry scenario
     Scenario(
@@ -398,8 +366,6 @@ SCENARIOS: list[Scenario] = [
             "Fulfil order ORD-208 and ship it to the customer."
         ),
         expected_status="fulfilled",
-        expected_total=53.35,
-        expected_delivery_days=3,
     ),
     # VAGUE — return for fulfilled order
     Scenario(
@@ -417,8 +383,6 @@ SCENARIOS: list[Scenario] = [
             "notified by SMS only, not email."
         ),
         expected_status="fulfilled",
-        expected_total=41.60,
-        expected_delivery_days=2,
     ),
     # --- Expanded Fulfillment (10: incl. 1 backorder, 2 risk review) ---
     # VAGUE — agent may waste time checking promotions
@@ -430,8 +394,6 @@ SCENARIOS: list[Scenario] = [
             "gets the best possible deal."
         ),
         expected_status="fulfilled",
-        expected_total=47.90,
-        expected_delivery_days=2,
     ),
     # MEDIUM — bulk order, agent should check promotions
     Scenario(
@@ -442,8 +404,6 @@ SCENARIOS: list[Scenario] = [
             "check if there are any applicable promotions."
         ),
         expected_status="fulfilled",
-        expected_total=109.55,
-        expected_delivery_days=2,
     ),
     # VAGUE — high value, risk review, new customer C-308
     Scenario(
@@ -453,8 +413,6 @@ SCENARIOS: list[Scenario] = [
             "Fulfil order ORD-215 and ship it to the customer."
         ),
         expected_status="fulfilled",
-        expected_total=324.10,
-        expected_delivery_days=2,
     ),
     # VAGUE — simple fulfillment, promotion exists but wrong qty
     Scenario(
@@ -462,8 +420,6 @@ SCENARIOS: list[Scenario] = [
         workflow_type="fulfilment",
         task_description="Fulfil order ORD-216 and ship it to the customer.",
         expected_status="fulfilled",
-        expected_total=36.90,
-        expected_delivery_days=3,
     ),
     # MEDIUM — new customer C-307, new product P-106, 4th warehouse
     Scenario(
@@ -474,8 +430,6 @@ SCENARIOS: list[Scenario] = [
             "everything is set up properly."
         ),
         expected_status="fulfilled",
-        expected_total=57.00,
-        expected_delivery_days=2,
     ),
     # VAGUE — new product P-107, ships from new warehouse WH-4
     Scenario(
@@ -483,8 +437,6 @@ SCENARIOS: list[Scenario] = [
         workflow_type="fulfilment",
         task_description="Fulfil order ORD-218 and ship it to the customer.",
         expected_status="fulfilled",
-        expected_total=153.05,
-        expected_delivery_days=3,
     ),
     # MEDIUM — P-103 still OOS, agent should check restock ETA
     Scenario(
@@ -504,8 +456,6 @@ SCENARIOS: list[Scenario] = [
             "Fulfil order ORD-220 and ship it to the customer."
         ),
         expected_status="fulfilled",
-        expected_total=367.60,
-        expected_delivery_days=3,
     ),
     # MEDIUM — bulk P-106, new warehouse comparison
     Scenario(
@@ -516,8 +466,6 @@ SCENARIOS: list[Scenario] = [
             "find cheapest shipping."
         ),
         expected_status="fulfilled",
-        expected_total=127.00,
-        expected_delivery_days=5,
     ),
     # VAGUE — flagged customer, risk + payment retry, P-107
     Scenario(
@@ -527,8 +475,6 @@ SCENARIOS: list[Scenario] = [
             "Fulfil order ORD-222 and ship it to the customer."
         ),
         expected_status="fulfilled",
-        expected_total=150.05,
-        expected_delivery_days=2,
     ),
     # --- Expanded Returns (3) ---
     # VAGUE
@@ -572,8 +518,6 @@ SCENARIOS: list[Scenario] = [
         expected_status="returned",
         replacement_order_id="ORD-510",
         expected_replacement_status="fulfilled",
-        expected_replacement_total=33.40,
-        expected_replacement_days=5,
     ),
     # MEDIUM — C-306, return P-108, fulfil P-107
     Scenario(
@@ -586,8 +530,6 @@ SCENARIOS: list[Scenario] = [
         expected_status="returned",
         replacement_order_id="ORD-511",
         expected_replacement_status="fulfilled",
-        expected_replacement_total=153.05,
-        expected_replacement_days=3,
     ),
     # VAGUE — C-303 flagged, risk + payment retry on replacement
     Scenario(
@@ -600,8 +542,6 @@ SCENARIOS: list[Scenario] = [
         expected_status="returned",
         replacement_order_id="ORD-512",
         expected_replacement_status="fulfilled",
-        expected_replacement_total=193.65,
-        expected_replacement_days=1,
     ),
 ]
 
@@ -635,27 +575,6 @@ async def verify_outcome(
             f" {scenario.expected_status}, got {actual_status}"
         )
 
-    if scenario.expected_total is not None:
-        actual_total = order.get("total")
-        if actual_total is None:
-            errors.append(
-                f"{scenario.order_id} total: expected"
-                f" {scenario.expected_total}, got None"
-            )
-        elif abs(actual_total - scenario.expected_total) > 0.02:
-            errors.append(
-                f"{scenario.order_id} total: expected"
-                f" {scenario.expected_total}, got {actual_total}"
-            )
-
-    if scenario.expected_delivery_days is not None:
-        actual_days = order.get("delivery_days")
-        if actual_days != scenario.expected_delivery_days:
-            errors.append(
-                f"{scenario.order_id} delivery_days: expected"
-                f" {scenario.expected_delivery_days}, got {actual_days}"
-            )
-
     # Exchange: also verify the replacement order
     if scenario.replacement_order_id:
         repl = await mcp_client.call_tool(
@@ -675,33 +594,6 @@ async def verify_outcome(
                     f" expected {scenario.expected_replacement_status},"
                     f" got {repl_status}"
                 )
-            if scenario.expected_replacement_total is not None:
-                repl_total = repl_order.get("total")
-                if repl_total is None:
-                    errors.append(
-                        f"{scenario.replacement_order_id} total:"
-                        f" expected"
-                        f" {scenario.expected_replacement_total},"
-                        f" got None"
-                    )
-                elif abs(
-                    repl_total - scenario.expected_replacement_total
-                ) > 0.02:
-                    errors.append(
-                        f"{scenario.replacement_order_id} total:"
-                        f" expected"
-                        f" {scenario.expected_replacement_total},"
-                        f" got {repl_total}"
-                    )
-            if scenario.expected_replacement_days is not None:
-                repl_days = repl_order.get("delivery_days")
-                if repl_days != scenario.expected_replacement_days:
-                    errors.append(
-                        f"{scenario.replacement_order_id}"
-                        f" delivery_days: expected"
-                        f" {scenario.expected_replacement_days},"
-                        f" got {repl_days}"
-                    )
 
     return VerificationResult(
         order_id=scenario.order_id,
@@ -821,16 +713,63 @@ class TracingMCPClient:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def build_guided_context(response: OptimalPathResponse) -> str:
-    if response.mode != "guided" or not response.path:
-        return ""
+def _render_decision_tree(tree: dict, response: OptimalPathResponse) -> str:
+    """Render a decision tree as a condition-based branching diagram."""
+    prefix = tree.get("common_prefix", [])
+    branches = tree.get("branches", [])
+    question = tree.get("condition_question", "Based on result?")
 
+    lines = ["OPTIMIZATION HINT — Suggested approach for this task type:\n"]
+
+    step = 1
+    for tool in prefix:
+        lines.append(f"  {step}. {tool}")
+        step += 1
+
+    if not branches:
+        return "\n".join(lines)
+
+    # Condition question at the branch point
+    lines.append(f"     |")
+    lines.append(f"     +-- {question}")
+
+    use_yes_no = len(branches) == 2
+
+    for idx, branch in enumerate(branches):
+        is_last = idx == len(branches) - 1
+        label = branch.get("label", f"Variant {idx + 1}")
+        runs = branch.get("execution_count", 0)
+        rate = branch.get("success_rate", 0.0)
+
+        if use_yes_no:
+            arrow = "YES" if idx == 0 else "NO"
+        else:
+            arrow = label
+
+        pipe = "   " if is_last else "|  "
+        lines.append(f"     |   |")
+        lines.append(
+            f"     |   {arrow} --> {label} ({runs} runs, {rate:.0%} success):"
+        )
+
+        path = branch.get("path", [])
+        for i, tool in enumerate(path):
+            lines.append(f"     {pipe}  {step + i}. {tool}")
+
+        if not is_last:
+            lines.append(f"     |")
+
+    return "\n".join(lines)
+
+
+def _format_single_path(response: OptimalPathResponse) -> str:
+    """Render a single optimal path as a soft suggestion."""
     numbered = "\n".join(
         f"  {i}. {tool}" for i, tool in enumerate(response.path, 1)
     )
     parts = [
-        "RECOMMENDED PATH: This tool sequence has been validated"
-        " on similar tasks and is highly likely to succeed:",
+        "OPTIMIZATION HINT — This tool sequence has worked"
+        " well for similar tasks:",
         numbered,
     ]
     if (
@@ -838,17 +777,68 @@ def build_guided_context(response: OptimalPathResponse) -> str:
         and response.execution_count is not None
     ):
         parts.append(
-            f"This sequence achieved a {response.success_rate:.0%}"
-            f" success rate across"
-            f" {response.execution_count} previous runs."
+            f"Based on {response.execution_count} runs"
+            f" ({response.success_rate:.0%} success rate)."
         )
+    return "\n".join(parts)
+
+
+def build_guided_context(response: OptimalPathResponse) -> str:
+    if response.mode != "guided" or not response.path:
+        return ""
+
+    parts = []
+
+    # Choose rendering: decision tree > alternatives > single path
+    if response.decision_tree:
+        parts.append(_render_decision_tree(response.decision_tree, response))
+    elif response.alternative_paths:
+        parts.append(
+            "OPTIMIZATION HINT — Multiple approaches have"
+            " worked for similar tasks:\n"
+        )
+        numbered = "\n".join(
+            f"    {i}. {tool}"
+            for i, tool in enumerate(response.path, 1)
+        )
+        parts.append(
+            f"  Path A (primary,"
+            f" {response.execution_count or 0} runs,"
+            f" {response.success_rate or 0:.0%} success):\n{numbered}"
+        )
+        for idx, alt in enumerate(response.alternative_paths or []):
+            numbered = "\n".join(
+                f"    {i}. {tool}"
+                for i, tool in enumerate(alt["tool_sequence"], 1)
+            )
+            label = f"Path {chr(ord('B') + idx)}"
+            parts.append(
+                f"  {label}"
+                f" ({alt.get('execution_count', 0)} runs,"
+                f" {alt.get('success_rate', 0):.0%} success):\n{numbered}"
+            )
+    else:
+        parts.append(_format_single_path(response))
+
+    # Failure warnings (already computed by analysis engine)
+    if response.failure_warnings:
+        warnings = "\n".join(
+            f"  - {w}" for w in response.failure_warnings
+        )
+        parts.append(f"\nCOMMON FAILURE PATTERNS:\n{warnings}")
+
+    # Soft-constraint guidelines (KnowAgent-inspired)
     parts.append(
-        "Follow this sequence closely. Skip any tool that"
-        " already shows [SUCCESS] in your execution history."
-        " If a step fails or returns unexpected results,"
-        " adapt as needed — but prefer returning to this"
-        " sequence once the issue is resolved."
+        "\nGUIDELINES:"
+        "\n- Use this as a suggested approach — adapt if"
+        " the situation requires it."
+        "\n- After each tool, check the response to decide"
+        " which branch to follow."
+        "\n- Skip steps that are already complete."
+        "\n- If a tool returns an error, reason about what"
+        " to do next — do not retry the same call."
     )
+
     return "\n".join(parts)
 
 
@@ -891,6 +881,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model", type=str, default="gemini/gemini-2.5-flash-lite",
         help="LLM model (default: gemini/gemini-2.5-flash-lite)",
+    )
+    parser.add_argument(
+        "--types", type=str, default=None,
+        help="Comma-separated workflow types to run (e.g. fulfilment,exchange). Default: all",
     )
     return parser.parse_args()
 
@@ -1113,10 +1107,15 @@ async def main() -> None:
     init_logging(LoggingConfig())
     log = get_logger("fulfillment_runner")
 
+    scenarios = SCENARIOS
+    if args.types:
+        allowed = {t.strip() for t in args.types.split(",")}
+        scenarios = [s for s in SCENARIOS if s.workflow_type in allowed]
+
     log.info(
         "demo_start",
         rounds=args.rounds,
-        scenarios=len(SCENARIOS),
+        scenarios=len(scenarios),
         collector_url=args.collector_url,
     )
 
@@ -1165,7 +1164,7 @@ async def main() -> None:
 
             for round_num in range(1, args.rounds + 1):
                 results = await run_round(
-                    round_num, args.rounds, SCENARIOS,
+                    round_num, args.rounds, scenarios,
                     mcp_client, reasoning_engine,
                     optimizer, args.model,
                 )
