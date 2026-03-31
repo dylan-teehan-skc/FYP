@@ -56,7 +56,6 @@ def _missing_step_warnings(
 ) -> list[str]:
     """Find optimal-path tools that are present in successes but missing in failures."""
     warnings: list[str] = []
-    optimal_tools = set(optimal_path.tool_sequence)
 
     for tool in optimal_path.tool_sequence:
         success_has = sum(1 for t in successful if tool in t.tool_sequence)
